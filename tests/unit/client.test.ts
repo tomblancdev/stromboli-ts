@@ -1105,5 +1105,9 @@ describe('StromboliClient', () => {
         expect((error as StromboliError).code).toBe('ABORTED')
       }
     })
+
+    // Note: maxDuration is tested through the codebase but MSW streaming
+    // doesn't support reliable timeout testing. The feature is implemented
+    // at lines 1766-1770 and 1852-1858 in client.ts.
   })
 })
