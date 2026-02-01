@@ -1,10 +1,7 @@
 import { loader } from 'fumadocs-core/source'
-import { resolveFiles } from 'fumadocs-mdx'
-import { docs, meta } from '../.source'
+import { docs, meta } from 'fumadocs-mdx:collections/server'
+import { toFumadocsSource } from 'fumadocs-mdx/runtime/server'
 
-export const source = loader({
+export const source = loader(toFumadocsSource(docs, meta), {
   baseUrl: '/docs',
-  source: {
-    files: resolveFiles({ docs, meta }),
-  },
 })
