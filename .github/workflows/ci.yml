@@ -133,10 +133,28 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Run tests with coverage
-        run: bun run test:coverage
+        run: bun run test:coverage 2>&1 | tee coverage-output.txt
 
       - name: Check coverage threshold
         run: |
-          # Bun outputs coverage summary to console
-          # We check that line coverage is reported (indicates tests ran)
-          echo "Coverage check passed - tests completed successfully"
+          # Extract line coverage percentage from Bun output
+          # Bun outputs: "All files | XX.XX | XX.XX | XX.XX | XX.XX"
+          COVERAGE=$(grep -E "^All files" coverage-output.txt | awk '{print $4}' | tr -d '%')
+
+          if [ -z "$COVERAGE" ]; then
+            echo "::warning::Could not extract coverage percentage from output"
+            echo "Coverage output:"
+            cat coverage-output.txt
+            exit 0
+          fi
+
+          echo "Line coverage: $COVERAGE%"
+
+          # Check if coverage is below 80%
+          THRESHOLD=80
+          if [ "$(echo "$COVERAGE < $THRESHOLD" | bc -l)" -eq 1 ]; then
+            echo "::error::Coverage $COVERAGE% is below $THRESHOLD% threshold"
+            exit 1
+          fi
+
+          echo "✅ Coverage $COVERAGE% meets the $THRESHOLD% threshold"

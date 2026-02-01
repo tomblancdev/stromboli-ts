@@ -183,6 +183,38 @@ interface ApiResult<T> {
 // ============================================================================
 
 /**
+ * Response object passed to onResponse interceptor.
+ * Provides safe access to response metadata without the full Response API.
+ */
+export interface InterceptorResponse {
+  /** HTTP status code */
+  status: number
+  /** Response headers */
+  headers: Headers
+  /** Request URL */
+  url: string
+  /** Whether the response was successful (status 200-299) */
+  ok: boolean
+}
+
+/**
+ * Custom retry delay function type.
+ * Called with the attempt number (1-based) and base delay.
+ *
+ * @param attempt - Current retry attempt (1 for first retry)
+ * @param baseDelay - Base delay from options (default 1000ms)
+ * @returns Delay in milliseconds before the retry
+ *
+ * @example
+ * ```typescript
+ * // Exponential backoff with jitter
+ * const delayFn: RetryDelayFn = (attempt, base) =>
+ *   base * Math.pow(2, attempt - 1) + Math.random() * 1000
+ * ```
+ */
+export type RetryDelayFn = (attempt: number, baseDelay: number) => number
+
+/**
  * Configuration options for the Stromboli client.
  *
  * @example
@@ -217,15 +249,30 @@ export interface StromboliClientOptions {
   retries?: number
 
   /**
-   * Base delay between retries in milliseconds.
+   * Base delay between retries in milliseconds, or a custom function.
+   *
+   * When a function is provided, it receives the attempt number (1-based)
+   * and base delay (1000ms), and should return the delay in milliseconds.
+   *
    * @default 1000
+   *
+   * @example
+   * ```typescript
+   * // Fixed delay
+   * retryDelay: 2000
+   *
+   * // Exponential with jitter
+   * retryDelay: (attempt, base) => base * Math.pow(2, attempt - 1) + Math.random() * 1000
+   * ```
    */
-  retryDelay?: number
+  retryDelay?: number | RetryDelayFn
 
   /**
-   * Backoff strategy for retries.
+   * Backoff strategy for retries (when retryDelay is a number).
    * - `linear` - Delay increases linearly (1s, 2s, 3s, ...)
    * - `exponential` - Delay doubles each retry (1s, 2s, 4s, ...)
+   *
+   * Ignored when retryDelay is a function.
    * @default 'exponential'
    */
   retryBackoff?: 'linear' | 'exponential'
@@ -248,13 +295,24 @@ export interface StromboliClientOptions {
    * Interceptor called after each successful response.
    * Can be used for logging or metrics.
    */
-  onResponse?: (response: Response) => void | Promise<void>
+  onResponse?: (response: InterceptorResponse) => void | Promise<void>
 
   /**
    * Interceptor called when an error occurs.
    * Can be used for error logging or reporting.
    */
   onError?: (error: StromboliError) => void
+
+  /**
+   * Debug logging callback.
+   * Called with internal SDK events for debugging and diagnostics.
+   *
+   * @example
+   * ```typescript
+   * debug: (msg, data) => console.log(`[stromboli] ${msg}`, data)
+   * ```
+   */
+  debug?: (message: string, data?: unknown) => void
 }
 
 // ============================================================================
@@ -422,6 +480,35 @@ export interface SimpleRunRequest {
   image?: string
 
   // ==========================================================================
+  // Request Control
+  // ==========================================================================
+
+  /**
+   * AbortSignal to cancel the request.
+   * When aborted, the request will throw a StromboliError with code 'ABORTED'.
+   *
+   * @example
+   * ```typescript
+   * const controller = new AbortController()
+   *
+   * // Cancel after 5 seconds
+   * setTimeout(() => controller.abort(), 5000)
+   *
+   * try {
+   *   await client.run({
+   *     prompt: 'Long task...',
+   *     signal: controller.signal,
+   *   })
+   * } catch (error) {
+   *   if (error.code === 'ABORTED') {
+   *     console.log('Request was cancelled')
+   *   }
+   * }
+   * ```
+   */
+  signal?: AbortSignal
+
+  // ==========================================================================
   // Agent Options
   // ==========================================================================
 
@@ -446,25 +533,111 @@ export interface SimpleRunRequest {
 }
 
 // ============================================================================
-// Helper Functions
-// ============================================================================
 // Streaming Types
 // ============================================================================
 
 /**
+ * Content event - Claude is outputting text.
+ */
+export interface StreamContentEvent {
+  type: 'content'
+  /** The content text */
+  data: string
+}
+
+/**
+ * Tool use event - Claude is calling a tool.
+ */
+export interface StreamToolUseEvent {
+  type: 'tool_use'
+  /** Unique tool call ID */
+  toolId: string
+  /** Name of the tool being called */
+  toolName: string
+  /** Input parameters for the tool */
+  toolInput: unknown
+}
+
+/**
+ * Tool result event - Result from a tool call.
+ */
+export interface StreamToolResultEvent {
+  type: 'tool_result'
+  /** Tool call ID this result corresponds to */
+  toolId: string
+  /** The result content */
+  result: string
+  /** Whether the tool execution errored */
+  isError: boolean
+}
+
+/**
+ * Error event - An error occurred during streaming.
+ */
+export interface StreamErrorEvent {
+  type: 'error'
+  /** Error message */
+  error: string
+}
+
+/**
+ * Done event - Stream has completed.
+ */
+export interface StreamDoneEvent {
+  type: 'done'
+}
+
+/**
  * Event emitted during streaming output.
  *
- * @property type - Event type: 'content', 'tool_use', 'error', or 'done'
- * @property data - Content data (for 'content' events)
- * @property error - Error message (for 'error' events)
+ * This is a discriminated union - use `event.type` to narrow the type:
+ *
+ * @example
+ * ```typescript
+ * for await (const event of client.stream({ prompt: 'Hello' })) {
+ *   switch (event.type) {
+ *     case 'content':
+ *       // event.data is string (not optional)
+ *       process.stdout.write(event.data)
+ *       break
+ *     case 'tool_use':
+ *       console.log(`Calling ${event.toolName}`)
+ *       break
+ *     case 'error':
+ *       console.error(event.error)
+ *       break
+ *     case 'done':
+ *       console.log('Stream complete')
+ *       break
+ *   }
+ * }
+ * ```
  */
-export interface StreamEvent {
-  /** Event type */
-  type: 'content' | 'tool_use' | 'error' | 'done'
-  /** Content data for 'content' events */
-  data?: string
-  /** Error message for 'error' events */
-  error?: string
+export type StreamEvent =
+  | StreamContentEvent
+  | StreamToolUseEvent
+  | StreamToolResultEvent
+  | StreamErrorEvent
+  | StreamDoneEvent
+
+/**
+ * Options for streaming execution.
+ */
+export interface StreamOptions {
+  /**
+   * Connection timeout in milliseconds.
+   * Maximum time to wait for initial connection.
+   * @default 30000
+   */
+  connectionTimeout?: number
+
+  /**
+   * Idle timeout in milliseconds.
+   * Maximum time to wait between chunks before aborting.
+   * Use this to detect stalled streams.
+   * @default 60000
+   */
+  idleTimeout?: number
 }
 
 // ============================================================================
@@ -643,15 +816,19 @@ export class StromboliClient {
 
   /** @internal */
   private readonly options: Required<
-    Pick<StromboliClientOptions, 'timeout' | 'retries' | 'retryDelay' | 'retryBackoff'>
-  > &
-    Pick<StromboliClientOptions, 'onRequest' | 'onResponse' | 'onError'>
+    Pick<StromboliClientOptions, 'timeout' | 'retries' | 'retryBackoff'>
+  > & {
+    retryDelay: number | RetryDelayFn
+  } & Pick<StromboliClientOptions, 'onRequest' | 'onResponse' | 'onError' | 'debug'>
 
   /**
    * Request timeout in milliseconds.
    * @readonly
    */
   readonly timeout: number
+
+  /** @internal */
+  private authToken?: string
 
   /**
    * Create a new Stromboli client.
@@ -667,6 +844,7 @@ export class StromboliClient {
    * const client = new StromboliClient({
    *   baseUrl: 'http://localhost:8585',
    *   timeout: 60000,
+   *   debug: (msg, data) => console.log(`[stromboli] ${msg}`, data),
    * })
    * ```
    */
@@ -683,7 +861,52 @@ export class StromboliClient {
       onRequest: opts.onRequest,
       onResponse: opts.onResponse,
       onError: opts.onError,
+      debug: opts.debug,
     }
+
+    // Register middleware for auth injection and request ID tracking
+    this.api.use({
+      onRequest: async ({ request }) => {
+        // Generate request ID for correlation
+        const requestId = this.generateRequestId()
+        request.headers.set('X-Request-ID', requestId)
+
+        // Auto-inject auth token if set
+        if (this.authToken) {
+          request.headers.set('Authorization', `Bearer ${this.authToken}`)
+        }
+
+        this.log('Request started', {
+          id: requestId,
+          method: request.method,
+          url: request.url,
+          authenticated: !!this.authToken,
+        })
+
+        return request
+      },
+    })
+  }
+
+  // ==========================================================================
+  // Internal Helpers
+  // ==========================================================================
+
+  /**
+   * Generate a unique request ID for correlation.
+   * Format: req_<timestamp>_<random>
+   * @internal
+   */
+  private generateRequestId(): string {
+    return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
+  }
+
+  /**
+   * Log a debug message if debug callback is set.
+   * @internal
+   */
+  private log(message: string, data?: unknown): void {
+    this.options.debug?.(message, data)
   }
 
   // ==========================================================================
@@ -705,21 +928,47 @@ export class StromboliClient {
    * @internal
    */
   private getRetryDelay(attempt: number): number {
-    return this.options.retryBackoff === 'exponential'
-      ? this.options.retryDelay * 2 ** (attempt - 1)
-      : this.options.retryDelay * attempt
+    const { retryDelay, retryBackoff } = this.options
+
+    // If retryDelay is a function, use it
+    if (typeof retryDelay === 'function') {
+      return retryDelay(attempt, 1000)
+    }
+
+    // Otherwise use built-in strategies
+    return retryBackoff === 'exponential'
+      ? retryDelay * 2 ** (attempt - 1)
+      : retryDelay * attempt
   }
 
   /**
    * Execute a request with timeout, error handling, and retry logic.
    * @internal
+   *
+   * @param fn - Function that executes the request
+   * @param externalSignal - Optional AbortSignal from caller for cancellation
+   * @param attempt - Current retry attempt (internal use)
    */
   private async request<T>(
     fn: (signal: AbortSignal) => Promise<ApiResult<T>>,
+    externalSignal?: AbortSignal,
     attempt = 1
   ): Promise<T> {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), this.options.timeout)
+
+    // Link external signal for user-initiated cancellation
+    if (externalSignal) {
+      if (externalSignal.aborted) {
+        const abortedError = StromboliError.abortedError()
+        this.options.onError?.(abortedError)
+        throw abortedError
+      }
+      externalSignal.addEventListener('abort', () => {
+        this.log('Request aborted by user')
+        controller.abort()
+      })
+    }
 
     try {
       // Call onRequest interceptor if provided
@@ -732,8 +981,16 @@ export class StromboliClient {
 
       // Call onResponse interceptor if provided
       if (this.options.onResponse && response) {
-        await this.options.onResponse(response as unknown as Response)
+        const interceptorResponse: InterceptorResponse = {
+          status: response.status,
+          headers: new Headers(),
+          url: '',
+          ok: response.status >= 200 && response.status < 300,
+        }
+        await this.options.onResponse(interceptorResponse)
       }
+
+      this.log('Request completed', { status: response.status, attempt })
 
       if (error || !data) {
         const stromboliError = StromboliError.fromResponse(response.status, error)
@@ -742,8 +999,10 @@ export class StromboliClient {
         // Retry on 5xx errors
         if (this.shouldRetry(stromboliError, attempt)) {
           clearTimeout(timeoutId)
-          await new Promise((r) => setTimeout(r, this.getRetryDelay(attempt)))
-          return this.request(fn, attempt + 1)
+          const delay = this.getRetryDelay(attempt)
+          this.log('Retrying request', { attempt: attempt + 1, delay, reason: stromboliError.code })
+          await new Promise((r) => setTimeout(r, delay))
+          return this.request(fn, externalSignal, attempt + 1)
         }
 
         throw stromboliError
@@ -758,8 +1017,15 @@ export class StromboliClient {
         throw err
       }
 
-      // Handle timeout (AbortError)
+      // Handle abort - check if it was user-initiated vs timeout
       if (err instanceof DOMException && err.name === 'AbortError') {
+        // If external signal was aborted, it's a user cancellation
+        if (externalSignal?.aborted) {
+          const abortedError = StromboliError.abortedError()
+          this.options.onError?.(abortedError)
+          throw abortedError
+        }
+        // Otherwise it's a timeout
         const timeoutError = StromboliError.timeoutError(this.options.timeout)
         this.options.onError?.(timeoutError)
         throw timeoutError
@@ -771,8 +1037,10 @@ export class StromboliClient {
 
       // Retry on network errors
       if (this.shouldRetry(networkError, attempt)) {
-        await new Promise((r) => setTimeout(r, this.getRetryDelay(attempt)))
-        return this.request(fn, attempt + 1)
+        const delay = this.getRetryDelay(attempt)
+        this.log('Retrying request', { attempt: attempt + 1, delay, reason: 'NETWORK_ERROR' })
+        await new Promise((r) => setTimeout(r, delay))
+        return this.request(fn, externalSignal, attempt + 1)
       }
 
       throw networkError
@@ -821,13 +1089,15 @@ export class StromboliClient {
    */
   async run(request: SimpleRunRequest | RunRequest): Promise<RunResponse> {
     const apiRequest = 'claude' in request ? request : toApiRequest(request)
+    const externalSignal = 'signal' in request ? request.signal : undefined
 
     return this.request(
       (signal) =>
         this.api.POST('/run', {
           body: apiRequest,
           signal,
-        }) as Promise<ApiResult<RunResponse>>
+        }) as Promise<ApiResult<RunResponse>>,
+      externalSignal
     )
   }
 
@@ -871,13 +1141,15 @@ export class StromboliClient {
    */
   async runAsync(request: SimpleRunRequest | RunRequest): Promise<AsyncRunResponse> {
     const apiRequest = 'claude' in request ? request : toApiRequest(request)
+    const externalSignal = 'signal' in request ? request.signal : undefined
 
     return this.request(
       (signal) =>
         this.api.POST('/run/async', {
           body: apiRequest,
           signal,
-        }) as Promise<ApiResult<AsyncRunResponse>>
+        }) as Promise<ApiResult<AsyncRunResponse>>,
+      externalSignal
     )
   }
 
@@ -1171,8 +1443,24 @@ export class StromboliClient {
   // Authentication
   // ==========================================================================
 
-  /** @internal */
-  private authToken?: string
+  /**
+   * Check if the client has an auth token set.
+   *
+   * Note: This only checks local state, not token validity.
+   * Use {@link validateToken} to verify with the server.
+   *
+   * @returns True if an auth token is set, false otherwise
+   *
+   * @example
+   * ```typescript
+   * if (!client.isAuthenticated()) {
+   *   await client.authenticate('my-client-id')
+   * }
+   * ```
+   */
+  isAuthenticated(): boolean {
+    return this.authToken !== undefined
+  }
 
   /**
    * Set the authentication token for API requests.
@@ -1331,6 +1619,7 @@ export class StromboliClient {
    * Useful for showing progress during long-running tasks.
    *
    * @param request - Run configuration (simple or full format)
+   * @param options - Streaming options (timeouts)
    * @yields Stream events with Claude's output
    * @throws {StromboliError} When the API returns an error
    *
@@ -1340,19 +1629,39 @@ export class StromboliClient {
    *   prompt: 'Count from 1 to 10 slowly',
    *   model: 'haiku',
    * })) {
-   *   if (event.type === 'content') {
-   *     process.stdout.write(event.data ?? '')
-   *   } else if (event.type === 'error') {
-   *     console.error('Error:', event.error)
+   *   switch (event.type) {
+   *     case 'content':
+   *       process.stdout.write(event.data)
+   *       break
+   *     case 'error':
+   *       console.error('Error:', event.error)
+   *       break
+   *     case 'done':
+   *       console.log('\nDone!')
+   *       break
    *   }
    * }
-   * console.log('\nDone!')
+   * ```
+   *
+   * @example With custom timeouts
+   * ```typescript
+   * for await (const event of client.stream(
+   *   { prompt: 'Long task...' },
+   *   { connectionTimeout: 10000, idleTimeout: 120000 }
+   * )) {
+   *   // Handle events...
+   * }
    * ```
    *
    * @see {@link run} - For non-streaming execution
+   * @see {@link StreamOptions} - Available options
    */
-  async *stream(request: SimpleRunRequest | RunRequest): AsyncGenerator<StreamEvent> {
+  async *stream(
+    request: SimpleRunRequest | RunRequest,
+    options: StreamOptions = {}
+  ): AsyncGenerator<StreamEvent> {
     const apiRequest = 'claude' in request ? request : toApiRequest(request)
+    const { connectionTimeout = 30000, idleTimeout = 60000 } = options
 
     // Build query params for GET /run/stream
     const params = new URLSearchParams({
@@ -1368,25 +1677,53 @@ export class StromboliClient {
     }
 
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), this.options.timeout)
+    let idleTimer: ReturnType<typeof setTimeout> | undefined
+    let connectionTimer: ReturnType<typeof setTimeout> | undefined
+    let isConnected = false
+
+    // Helper to reset idle timer
+    const resetIdleTimer = () => {
+      if (idleTimer) clearTimeout(idleTimer)
+      idleTimer = setTimeout(() => {
+        this.log('Stream idle timeout', { idleTimeout })
+        controller.abort()
+      }, idleTimeout)
+    }
+
+    // Connection timeout
+    connectionTimer = setTimeout(() => {
+      if (!isConnected) {
+        this.log('Stream connection timeout', { connectionTimeout })
+        controller.abort()
+      }
+    }, connectionTimeout)
 
     try {
       // We need to use fetch directly for SSE streaming
       const url = `${this.baseUrl}/run/stream?${params.toString()}`
+      const requestId = this.generateRequestId()
 
       const headers: Record<string, string> = {
         Accept: 'text/event-stream',
+        'X-Request-ID': requestId,
       }
 
       if (this.authToken) {
         headers.Authorization = `Bearer ${this.authToken}`
       }
 
+      this.log('Stream started', { id: requestId, url })
+
       const response = await fetch(url, {
         method: 'GET',
         headers,
         signal: controller.signal,
       })
+
+      // Connected - clear connection timeout and start idle timer
+      isConnected = true
+      if (connectionTimer) clearTimeout(connectionTimer)
+      resetIdleTimer()
 
       if (!response.ok) {
         throw StromboliError.fromResponse(response.status, await response.text())
@@ -1404,9 +1741,13 @@ export class StromboliClient {
         const { done, value } = await reader.read()
 
         if (done) {
+          this.log('Stream completed')
           yield { type: 'done' }
           break
         }
+
+        // Reset idle timer on each chunk
+        resetIdleTimer()
 
         buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split('\n')
@@ -1431,12 +1772,22 @@ export class StromboliClient {
       }
 
       if (err instanceof DOMException && err.name === 'AbortError') {
-        throw StromboliError.timeoutError(this.options.timeout)
+        // Determine if it was connection timeout or idle timeout
+        const timeout = isConnected ? idleTimeout : connectionTimeout
+        const errorType = isConnected ? 'IDLE_TIMEOUT' : 'CONNECTION_TIMEOUT'
+        this.log('Stream timeout', { type: errorType, timeout })
+        throw new StromboliError(
+          isConnected
+            ? `Stream idle timeout after ${idleTimeout}ms`
+            : `Stream connection timeout after ${connectionTimeout}ms`,
+          errorType
+        )
       }
 
       throw StromboliError.networkError(err)
     } finally {
-      clearTimeout(timeoutId)
+      if (idleTimer) clearTimeout(idleTimer)
+      if (connectionTimer) clearTimeout(connectionTimer)
     }
   }
 

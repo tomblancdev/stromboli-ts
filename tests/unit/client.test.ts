@@ -606,6 +606,36 @@ describe('StromboliClient', () => {
       await client.logout()
       expect(client.getAuthToken()).toBeUndefined()
     })
+
+    it('should report isAuthenticated correctly', async () => {
+      const client = createClient()
+
+      expect(client.isAuthenticated()).toBe(false)
+
+      await client.authenticate('my-client-id')
+      expect(client.isAuthenticated()).toBe(true)
+
+      await client.logout()
+      expect(client.isAuthenticated()).toBe(false)
+    })
+
+    it('should auto-inject auth token into requests', async () => {
+      let capturedAuthHeader: string | null = null
+
+      server.use(
+        http.get(`${MOCK_BASE_URL}/health`, ({ request }) => {
+          capturedAuthHeader = request.headers.get('Authorization')
+          return HttpResponse.json(createHealthResponse())
+        })
+      )
+
+      const client = createClient()
+      client.setAuthToken('test-token-123')
+
+      await client.health()
+
+      expect(capturedAuthHeader).toBe('Bearer test-token-123')
+    })
   })
 
   // ==========================================================================
@@ -705,6 +735,201 @@ describe('StromboliClient', () => {
 
       expect(events.length).toBeGreaterThan(0)
       expect(events[events.length - 1].type).toBe('done')
+    })
+
+    it('should accept stream options', async () => {
+      const client = createClient()
+      const events: { type: string }[] = []
+
+      for await (const event of client.stream(
+        { prompt: 'Hello' },
+        { connectionTimeout: 5000, idleTimeout: 10000 }
+      )) {
+        events.push(event)
+        if (event.type === 'done') break
+      }
+
+      expect(events.length).toBeGreaterThan(0)
+    })
+  })
+
+  // ==========================================================================
+  // Request Cancellation Tests
+  // ==========================================================================
+
+  describe('request cancellation', () => {
+    it('should abort request when signal is aborted', async () => {
+      server.use(
+        http.post(`${MOCK_BASE_URL}/run`, async () => {
+          // Simulate a slow request
+          await new Promise((r) => setTimeout(r, 500))
+          return HttpResponse.json(createRunResponse())
+        })
+      )
+
+      const client = createClient()
+      const controller = new AbortController()
+
+      // Abort after 50ms
+      setTimeout(() => controller.abort(), 50)
+
+      await expect(
+        client.run({
+          prompt: 'Hello',
+          signal: controller.signal,
+        })
+      ).rejects.toMatchObject({
+        code: 'ABORTED',
+        message: 'Request was aborted',
+      })
+    })
+
+    it('should throw immediately if signal already aborted', async () => {
+      const client = createClient()
+      const controller = new AbortController()
+      controller.abort() // Already aborted
+
+      await expect(
+        client.run({
+          prompt: 'Hello',
+          signal: controller.signal,
+        })
+      ).rejects.toMatchObject({
+        code: 'ABORTED',
+      })
+    })
+  })
+
+  // ==========================================================================
+  // Debug Logging Tests
+  // ==========================================================================
+
+  describe('debug logging', () => {
+    it('should call debug callback with request info', async () => {
+      const logs: { message: string; data?: unknown }[] = []
+
+      const client = new StromboliClient({
+        baseUrl: MOCK_BASE_URL,
+        debug: (message, data) => logs.push({ message, data }),
+      })
+
+      await client.health()
+
+      expect(logs.length).toBeGreaterThan(0)
+      expect(logs.some((l) => l.message === 'Request started')).toBe(true)
+      expect(logs.some((l) => l.message === 'Request completed')).toBe(true)
+    })
+
+    it('should log retry attempts', async () => {
+      const logs: { message: string; data?: unknown }[] = []
+      let attempts = 0
+
+      server.use(
+        http.get(`${MOCK_BASE_URL}/health`, () => {
+          attempts++
+          if (attempts < 2) {
+            return HttpResponse.json(createErrorResponse('Server error'), { status: 500 })
+          }
+          return HttpResponse.json(createHealthResponse())
+        })
+      )
+
+      const client = new StromboliClient({
+        baseUrl: MOCK_BASE_URL,
+        retries: 2,
+        retryDelay: 10,
+        debug: (message, data) => logs.push({ message, data }),
+      })
+
+      await client.health()
+
+      expect(logs.some((l) => l.message === 'Retrying request')).toBe(true)
+    })
+  })
+
+  // ==========================================================================
+  // Request ID Tracking Tests
+  // ==========================================================================
+
+  describe('request ID tracking', () => {
+    it('should add X-Request-ID header to all requests', async () => {
+      let capturedRequestId: string | null = null
+
+      server.use(
+        http.get(`${MOCK_BASE_URL}/health`, ({ request }) => {
+          capturedRequestId = request.headers.get('X-Request-ID')
+          return HttpResponse.json(createHealthResponse())
+        })
+      )
+
+      const client = createClient()
+      await client.health()
+
+      expect(capturedRequestId).not.toBeNull()
+      expect(capturedRequestId).toMatch(/^req_[a-z0-9]+_[a-z0-9]+$/)
+    })
+  })
+
+  // ==========================================================================
+  // Custom Retry Delay Tests
+  // ==========================================================================
+
+  describe('custom retry delay', () => {
+    it('should use custom delay function', async () => {
+      const delays: number[] = []
+      let attempts = 0
+
+      server.use(
+        http.get(`${MOCK_BASE_URL}/health`, () => {
+          attempts++
+          if (attempts < 3) {
+            return HttpResponse.json(createErrorResponse('Server error'), { status: 500 })
+          }
+          return HttpResponse.json(createHealthResponse())
+        })
+      )
+
+      const client = new StromboliClient({
+        baseUrl: MOCK_BASE_URL,
+        retries: 3,
+        retryDelay: (attempt, _baseDelay) => {
+          const delay = attempt * 10 // Linear 10ms delay
+          delays.push(delay)
+          return delay
+        },
+      })
+
+      await client.health()
+
+      expect(delays).toEqual([10, 20]) // Attempt 1 = 10ms, Attempt 2 = 20ms
+    })
+
+    it('should receive correct attempt number and base delay', async () => {
+      const callArgs: { attempt: number; baseDelay: number }[] = []
+      let attempts = 0
+
+      server.use(
+        http.get(`${MOCK_BASE_URL}/health`, () => {
+          attempts++
+          if (attempts < 2) {
+            return HttpResponse.json(createErrorResponse('Server error'), { status: 500 })
+          }
+          return HttpResponse.json(createHealthResponse())
+        })
+      )
+
+      const client = new StromboliClient({
+        baseUrl: MOCK_BASE_URL,
+        retries: 2,
+        retryDelay: (attempt, baseDelay) => {
+          callArgs.push({ attempt, baseDelay })
+          return 10
+        },
+      })
+
+      await client.health()
+
+      expect(callArgs).toEqual([{ attempt: 1, baseDelay: 1000 }])
     })
   })
 })

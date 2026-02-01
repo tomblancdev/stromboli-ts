@@ -101,6 +101,10 @@ export { StromboliClient, isCompatible, SDK_VERSION, API_VERSION_RANGE } from '.
 export type {
   /** Options for initializing the client */
   StromboliClientOptions,
+  /** Response object for onResponse interceptor */
+  InterceptorResponse,
+  /** Custom retry delay function type */
+  RetryDelayFn,
   /** Simplified request interface for common use cases */
   SimpleRunRequest,
   /** Full request type for running Claude */
@@ -137,8 +141,20 @@ export type {
   JobStatus,
   /** Options for waiting for job completion */
   WaitForJobOptions,
-  /** Streaming event from Claude output */
+  /** Streaming event from Claude output (discriminated union) */
   StreamEvent,
+  /** Content event during streaming */
+  StreamContentEvent,
+  /** Tool use event during streaming */
+  StreamToolUseEvent,
+  /** Tool result event during streaming */
+  StreamToolResultEvent,
+  /** Error event during streaming */
+  StreamErrorEvent,
+  /** Done event during streaming */
+  StreamDoneEvent,
+  /** Options for streaming execution */
+  StreamOptions,
 } from './client'
 
 // ============================================================================

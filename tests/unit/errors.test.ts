@@ -63,4 +63,14 @@ describe('StromboliError', () => {
       expect(error.code).toBe('TIMEOUT_ERROR')
     })
   })
+
+  describe('abortedError', () => {
+    it('should create an aborted error', () => {
+      const error = StromboliError.abortedError()
+
+      expect(error.message).toBe('Request was aborted')
+      expect(error.code).toBe('ABORTED')
+      expect(error.status).toBeUndefined()
+    })
+  })
 })

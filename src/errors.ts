@@ -186,4 +186,28 @@ export class StromboliError extends Error {
   static timeoutError(timeout: number): StromboliError {
     return new StromboliError(`Request timed out after ${timeout}ms`, 'TIMEOUT_ERROR')
   }
+
+  /**
+   * Create an aborted error.
+   *
+   * Used when a request is cancelled by the user via AbortSignal.
+   *
+   * @returns A new StromboliError instance
+   *
+   * @example
+   * ```typescript
+   * const controller = new AbortController()
+   * controller.abort()
+   *
+   * // Later in the code
+   * if (signal.aborted) {
+   *   throw StromboliError.abortedError()
+   * }
+   * // error.message === 'Request was aborted'
+   * // error.code === 'ABORTED'
+   * ```
+   */
+  static abortedError(): StromboliError {
+    return new StromboliError('Request was aborted', 'ABORTED')
+  }
 }
