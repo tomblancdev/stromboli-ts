@@ -1,0 +1,151 @@
+---
+title: Error Handling
+description: How to handle errors in the Stromboli TypeScript SDK
+---
+
+# Error Handling
+
+All errors thrown by the SDK are instances of `StromboliError`, making it easy to catch and handle Stromboli-specific errors.
+
+## StromboliError
+
+```typescript
+import { StromboliClient, StromboliError } from 'stromboli-ts'
+
+const client = new StromboliClient('http://localhost:8585')
+
+try {
+  await client.run({ prompt: 'Hello' })
+} catch (error) {
+  if (error instanceof StromboliError) {
+    console.error(`Stromboli error [${error.code}]: ${error.message}`)
+    console.error(`HTTP status: ${error.status}`)
+  } else {
+    throw error // Re-throw unknown errors
+  }
+}
+```
+
+## Error Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `message` | `string` | Human-readable error message |
+| `code` | `string` | Error code for programmatic handling |
+| `status` | `number \| undefined` | HTTP status code (if applicable) |
+| `cause` | `unknown` | Original error or response body |
+
+## Error Codes
+
+### `HTTP_ERROR`
+
+API returned an error response.
+
+```typescript
+switch (error.status) {
+  case 400:
+    console.error('Bad request - check your parameters')
+    break
+  case 401:
+    console.error('Unauthorized - check your credentials')
+    break
+  case 404:
+    console.error('Not found - job or session does not exist')
+    break
+  case 500:
+    console.error('Server error - try again later')
+    break
+  case 503:
+    console.error('Service unavailable')
+    break
+}
+```
+
+### `NETWORK_ERROR`
+
+Could not reach the server (DNS failure, connection refused, etc.).
+
+```typescript
+if (error.code === 'NETWORK_ERROR') {
+  console.error('Cannot connect to Stromboli server')
+  console.error('Original error:', error.cause)
+}
+```
+
+### `TIMEOUT_ERROR`
+
+Request exceeded the configured timeout.
+
+```typescript
+if (error.code === 'TIMEOUT_ERROR') {
+  console.error('Request timed out')
+  // Consider using runAsync for long tasks
+}
+```
+
+## Handling Specific Scenarios
+
+### Job Not Found
+
+```typescript
+try {
+  const job = await client.getJob('job-nonexistent')
+} catch (error) {
+  if (error instanceof StromboliError && error.status === 404) {
+    console.error('Job does not exist or has been deleted')
+  }
+}
+```
+
+### Session Expired
+
+```typescript
+try {
+  await client.run({
+    prompt: 'Continue our chat',
+    sessionId: 'sess-old',
+    resume: true,
+  })
+} catch (error) {
+  if (error instanceof StromboliError && error.status === 404) {
+    // Session no longer exists, start a new one
+    const result = await client.run({
+      prompt: 'Continue our chat',
+    })
+  }
+}
+```
+
+### Retry Logic
+
+```typescript
+async function runWithRetry(
+  client: StromboliClient,
+  prompt: string,
+  maxRetries = 3
+) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await client.run({ prompt })
+    } catch (error) {
+      if (error instanceof StromboliError) {
+        // Retry on server errors
+        if (error.status && error.status >= 500 && attempt < maxRetries) {
+          console.log(`Attempt ${attempt} failed, retrying...`)
+          await new Promise(r => setTimeout(r, 1000 * attempt))
+          continue
+        }
+      }
+      throw error
+    }
+  }
+}
+```
+
+## Best Practices
+
+1. **Always catch StromboliError** - Don't let errors crash your application
+2. **Check error codes** - Handle different error types appropriately
+3. **Log the cause** - The `cause` property contains useful debugging info
+4. **Use retries for transient failures** - Server errors (5xx) are often temporary
+5. **Set appropriate timeouts** - Use `runAsync` for long-running tasks

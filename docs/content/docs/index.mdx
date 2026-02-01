@@ -1,0 +1,52 @@
+---
+title: Getting Started
+description: Get started with the Stromboli TypeScript SDK
+---
+
+# Getting Started
+
+The official TypeScript SDK for [Stromboli](https://github.com/tomblancdev/stromboli) - Container orchestration for Claude Code agents.
+
+## Installation
+
+```bash
+# npm
+npm install stromboli-ts
+
+# bun
+bun add stromboli-ts
+
+# pnpm
+pnpm add stromboli-ts
+```
+
+## Quick Start
+
+```typescript
+import { StromboliClient } from 'stromboli-ts'
+
+// Create a client
+const client = new StromboliClient('http://localhost:8585')
+
+// Run Claude in an isolated container
+const result = await client.run({
+  prompt: 'Hello, Claude!',
+  model: 'haiku',
+})
+
+console.log(result.output)
+```
+
+## Features
+
+- **Type-safe**: Full TypeScript support with types generated from the OpenAPI spec
+- **Simple API**: High-level wrapper for common use cases
+- **Async jobs**: Start long-running tasks and poll for results
+- **Session continuity**: Resume conversations with Claude
+- **Error handling**: Custom `StromboliError` class with detailed error info
+
+## Next Steps
+
+- [Basic Usage](/docs/usage) - Learn the core concepts
+- [API Reference](/docs/api) - Explore all available methods
+- [Examples](/docs/examples) - See real-world usage patterns

@@ -96,6 +96,21 @@ clean:
 clean-image:
 	podman rmi $(IMAGE_NAME) 2>/dev/null || true
 
+# Documentation
+.PHONY: docs
+docs:
+	@echo "📚 Installing docs dependencies..."
+	@podman run --rm -v $(PWD)/docs:/app:Z -w /app docker.io/oven/bun:1 bun install
+	@echo "🚀 Starting docs dev server..."
+	@podman run --rm -it -v $(PWD)/docs:/app:Z -w /app -p 3000:3000 docker.io/oven/bun:1 bun run dev
+
+.PHONY: docs-build
+docs-build:
+	@echo "📚 Installing docs dependencies..."
+	@podman run --rm -v $(PWD)/docs:/app:Z -w /app docker.io/oven/bun:1 bun install
+	@echo "🔨 Building docs..."
+	@podman run --rm -v $(PWD)/docs:/app:Z -w /app docker.io/oven/bun:1 bun run build
+
 # Help
 .PHONY: help
 help:
@@ -121,6 +136,10 @@ help:
 	@echo "  make build        - Build for production"
 	@echo "  make generate     - Regenerate from OpenAPI"
 	@echo "  make install      - Install dependencies"
+	@echo ""
+	@echo "Documentation:"
+	@echo "  make docs         - Run docs dev server"
+	@echo "  make docs-build   - Build docs for production"
 	@echo ""
 	@echo "Clean:"
 	@echo "  make clean        - Remove build artifacts"

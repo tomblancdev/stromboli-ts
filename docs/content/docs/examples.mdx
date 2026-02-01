@@ -1,0 +1,205 @@
+---
+title: Examples
+description: Real-world examples using the Stromboli TypeScript SDK
+---
+
+# Examples
+
+## Code Review Bot
+
+```typescript
+import { StromboliClient } from 'stromboli-ts'
+
+const client = new StromboliClient('http://localhost:8585')
+
+async function reviewPullRequest(prNumber: number) {
+  const result = await client.run({
+    prompt: `Review pull request #${prNumber}. Focus on:
+- Code quality and best practices
+- Potential bugs or security issues
+- Performance implications
+- Test coverage`,
+    model: 'opus',
+    workdir: '/workspace',
+    allowedTools: ['Bash(git:*)', 'Read', 'Grep', 'Glob'],
+    timeout: '10m',
+  })
+
+  return result.output
+}
+```
+
+## Test Runner
+
+```typescript
+import { StromboliClient } from 'stromboli-ts'
+
+const client = new StromboliClient('http://localhost:8585')
+
+async function runTests() {
+  // Start async job for potentially long test suite
+  const job = await client.runAsync({
+    prompt: 'Run all tests and fix any failures. Report the results.',
+    model: 'sonnet',
+    workdir: '/workspace',
+    allowedTools: ['Bash', 'Read', 'Edit', 'Write'],
+    timeout: '30m',
+    memory: '2g',
+  })
+
+  console.log(`Test job started: ${job.job_id}`)
+
+  // Poll for results
+  let status = await client.getJob(job.job_id!)
+  while (status.status === 'pending' || status.status === 'running') {
+    await new Promise(r => setTimeout(r, 10000))
+    status = await client.getJob(job.job_id!)
+    console.log(`Status: ${status.status}`)
+  }
+
+  if (status.status === 'completed') {
+    console.log('Tests completed!')
+    console.log(status.output)
+  } else {
+    console.error('Tests failed:', status.error)
+  }
+}
+```
+
+## Interactive Chat
+
+```typescript
+import { StromboliClient } from 'stromboli-ts'
+import * as readline from 'readline'
+
+const client = new StromboliClient('http://localhost:8585')
+
+async function chat() {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  })
+
+  let sessionId: string | undefined
+
+  const askQuestion = () => {
+    rl.question('You: ', async (input) => {
+      if (input.toLowerCase() === 'exit') {
+        if (sessionId) {
+          await client.deleteSession(sessionId)
+        }
+        rl.close()
+        return
+      }
+
+      const result = await client.run({
+        prompt: input,
+        model: 'haiku',
+        sessionId,
+        resume: !!sessionId,
+      })
+
+      sessionId = result.session_id
+      console.log(`\nClaude: ${result.output}\n`)
+      askQuestion()
+    })
+  }
+
+  console.log('Chat with Claude (type "exit" to quit)\n')
+  askQuestion()
+}
+
+chat()
+```
+
+## Batch Processing
+
+```typescript
+import { StromboliClient } from 'stromboli-ts'
+
+const client = new StromboliClient('http://localhost:8585')
+
+interface Task {
+  id: string
+  prompt: string
+}
+
+async function processBatch(tasks: Task[]) {
+  // Start all tasks concurrently
+  const jobs = await Promise.all(
+    tasks.map(async (task) => {
+      const job = await client.runAsync({
+        prompt: task.prompt,
+        model: 'haiku',
+      })
+      return { taskId: task.id, jobId: job.job_id! }
+    })
+  )
+
+  console.log(`Started ${jobs.length} jobs`)
+
+  // Wait for all to complete
+  const results = await Promise.all(
+    jobs.map(async ({ taskId, jobId }) => {
+      let status = await client.getJob(jobId)
+      while (status.status === 'pending' || status.status === 'running') {
+        await new Promise(r => setTimeout(r, 2000))
+        status = await client.getJob(jobId)
+      }
+      return { taskId, status: status.status, output: status.output }
+    })
+  )
+
+  return results
+}
+
+// Usage
+const tasks = [
+  { id: '1', prompt: 'Summarize file1.ts' },
+  { id: '2', prompt: 'Summarize file2.ts' },
+  { id: '3', prompt: 'Summarize file3.ts' },
+]
+
+processBatch(tasks).then(console.log)
+```
+
+## Webhook Handler (Express)
+
+```typescript
+import express from 'express'
+import { StromboliClient } from 'stromboli-ts'
+
+const app = express()
+const client = new StromboliClient('http://localhost:8585')
+
+app.use(express.json())
+
+// Start a job with webhook
+app.post('/start-job', async (req, res) => {
+  const job = await client.runAsync({
+    prompt: req.body.prompt,
+    model: 'sonnet',
+    webhookUrl: 'http://my-server:3000/webhook',
+  })
+
+  res.json({ jobId: job.job_id })
+})
+
+// Receive webhook when job completes
+app.post('/webhook', (req, res) => {
+  const { job_id, status, output, error } = req.body
+
+  console.log(`Job ${job_id} completed with status: ${status}`)
+
+  if (status === 'completed') {
+    // Process the output
+    console.log('Output:', output)
+  } else {
+    console.error('Error:', error)
+  }
+
+  res.sendStatus(200)
+})
+
+app.listen(3000)
+```

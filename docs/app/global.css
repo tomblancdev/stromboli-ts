@@ -1,0 +1,6 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/style.css';
+
+:root {
+  --fd-primary: 239 68% 56%;
+}

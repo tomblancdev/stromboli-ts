@@ -1,0 +1,12 @@
+{
+  "title": "Documentation",
+  "pages": [
+    "index",
+    "usage",
+    "---",
+    "api",
+    "examples",
+    "---",
+    "errors"
+  ]
+}

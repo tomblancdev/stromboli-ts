@@ -1,0 +1,190 @@
+---
+title: API Reference
+description: Complete API reference for the Stromboli TypeScript SDK
+---
+
+# API Reference
+
+## StromboliClient
+
+The main client class for interacting with the Stromboli API.
+
+### Constructor
+
+```typescript
+new StromboliClient(options: string | StromboliClientOptions)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `options` | `string \| StromboliClientOptions` | Base URL or options object |
+
+### Methods
+
+#### `run(request)`
+
+Run Claude synchronously in an isolated container.
+
+```typescript
+async run(request: SimpleRunRequest | RunRequest): Promise<RunResponse>
+```
+
+**Returns:** `RunResponse` with output, session_id, and status.
+
+---
+
+#### `runAsync(request)`
+
+Start an asynchronous Claude session.
+
+```typescript
+async runAsync(request: SimpleRunRequest | RunRequest): Promise<AsyncRunResponse>
+```
+
+**Returns:** `AsyncRunResponse` with job_id.
+
+---
+
+#### `getJob(jobId)`
+
+Get the status and result of an async job.
+
+```typescript
+async getJob(jobId: string): Promise<JobResponse>
+```
+
+---
+
+#### `listJobs()`
+
+List all async jobs.
+
+```typescript
+async listJobs(): Promise<JobListResponse>
+```
+
+---
+
+#### `cancelJob(jobId)`
+
+Cancel a running or pending job.
+
+```typescript
+async cancelJob(jobId: string): Promise<void>
+```
+
+---
+
+#### `health()`
+
+Check the API health status.
+
+```typescript
+async health(): Promise<HealthResponse>
+```
+
+---
+
+#### `claudeStatus()`
+
+Check Claude configuration status.
+
+```typescript
+async claudeStatus(): Promise<ClaudeStatusResponse>
+```
+
+---
+
+#### `listSessions()`
+
+List all existing sessions.
+
+```typescript
+async listSessions(): Promise<SessionListResponse>
+```
+
+---
+
+#### `deleteSession(sessionId)`
+
+Delete a session and its conversation history.
+
+```typescript
+async deleteSession(sessionId: string): Promise<SessionDestroyResponse>
+```
+
+---
+
+#### `getSessionMessages(sessionId, options?)`
+
+Get paginated messages from a session.
+
+```typescript
+async getSessionMessages(
+  sessionId: string,
+  options?: { offset?: number; limit?: number }
+): Promise<SessionMessagesResponse>
+```
+
+---
+
+## Types
+
+### SimpleRunRequest
+
+Simplified request interface for common use cases.
+
+```typescript
+interface SimpleRunRequest {
+  prompt: string
+  model?: 'sonnet' | 'opus' | 'haiku'
+  workdir?: string
+  sessionId?: string
+  resume?: boolean
+  timeout?: string
+  memory?: string
+  maxBudgetUsd?: number
+  systemPrompt?: string
+  appendSystemPrompt?: string
+  allowedTools?: string[]
+  disallowedTools?: string[]
+  webhookUrl?: string
+}
+```
+
+### RunResponse
+
+```typescript
+interface RunResponse {
+  id?: string
+  status?: string
+  output?: string
+  session_id?: string
+  error?: string
+}
+```
+
+### JobResponse
+
+```typescript
+interface JobResponse {
+  id?: string
+  status?: 'pending' | 'running' | 'completed' | 'failed' | 'crashed' | 'cancelled'
+  output?: string
+  error?: string
+  session_id?: string
+  created_at?: string
+  updated_at?: string
+}
+```
+
+### HealthResponse
+
+```typescript
+interface HealthResponse {
+  name?: string
+  status?: string
+  version?: string
+  components?: ComponentHealth[]
+}
+```

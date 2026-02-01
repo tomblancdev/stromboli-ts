@@ -1,0 +1,165 @@
+---
+title: Basic Usage
+description: Learn how to use the Stromboli TypeScript SDK
+---
+
+# Basic Usage
+
+This guide covers the core functionality of the Stromboli TypeScript SDK.
+
+## Creating a Client
+
+```typescript
+import { StromboliClient } from 'stromboli-ts'
+
+// Simple: just the URL
+const client = new StromboliClient('http://localhost:8585')
+
+// With options
+const client = new StromboliClient({
+  baseUrl: 'http://localhost:8585',
+  timeout: 60000, // 1 minute
+})
+```
+
+## Synchronous Execution
+
+For quick tasks, use the `run()` method which waits for completion:
+
+```typescript
+const result = await client.run({
+  prompt: 'What files are in this directory?',
+  model: 'haiku',
+})
+
+console.log(result.output)
+console.log(result.session_id) // Save this to continue the conversation
+```
+
+### Available Options
+
+```typescript
+await client.run({
+  // Required
+  prompt: 'Your prompt here',
+
+  // Model selection
+  model: 'sonnet', // 'sonnet' | 'opus' | 'haiku'
+
+  // Container options
+  workdir: '/workspace',
+  timeout: '10m',
+  memory: '1g',
+
+  // Claude options
+  maxBudgetUsd: 5.0,
+  systemPrompt: 'You are a senior developer',
+  appendSystemPrompt: 'Focus on security',
+  allowedTools: ['Bash', 'Read', 'Edit'],
+  disallowedTools: ['Write'],
+
+  // Session continuity
+  sessionId: 'sess-abc123',
+  resume: true,
+})
+```
+
+## Asynchronous Execution
+
+For long-running tasks, use `runAsync()`:
+
+```typescript
+// Start the job
+const job = await client.runAsync({
+  prompt: 'Perform a comprehensive code review',
+  model: 'opus',
+})
+
+console.log(`Job started: ${job.job_id}`)
+
+// Poll for completion
+let status = await client.getJob(job.job_id!)
+while (status.status === 'pending' || status.status === 'running') {
+  await new Promise(r => setTimeout(r, 5000))
+  status = await client.getJob(job.job_id!)
+  console.log(`Status: ${status.status}`)
+}
+
+console.log(status.output)
+```
+
+### Using Webhooks
+
+Instead of polling, you can receive notifications:
+
+```typescript
+const job = await client.runAsync({
+  prompt: 'Long running task...',
+  webhookUrl: 'https://my-app.com/webhook',
+})
+```
+
+## Session Management
+
+### Continuing a Conversation
+
+```typescript
+// First message
+const { session_id } = await client.run({
+  prompt: 'My name is Tom',
+})
+
+// Continue the conversation
+const response = await client.run({
+  prompt: 'What is my name?',
+  sessionId: session_id,
+  resume: true,
+})
+// Claude will remember: "Your name is Tom"
+```
+
+### Listing Sessions
+
+```typescript
+const { sessions } = await client.listSessions()
+
+for (const sessionId of sessions ?? []) {
+  console.log(sessionId)
+}
+```
+
+### Viewing Session History
+
+```typescript
+const history = await client.getSessionMessages('sess-abc123', {
+  limit: 10,
+  offset: 0,
+})
+
+for (const msg of history.messages ?? []) {
+  console.log(`[${msg.type}] ${msg.content?.role}`)
+}
+```
+
+### Deleting a Session
+
+```typescript
+const result = await client.deleteSession('sess-abc123')
+
+if (result.success) {
+  console.log('Session deleted')
+}
+```
+
+## Health Check
+
+```typescript
+const health = await client.health()
+
+console.log(`Stromboli v${health.version}`)
+console.log(`Status: ${health.status}`)
+
+for (const component of health.components ?? []) {
+  console.log(`  ${component.name}: ${component.status}`)
+}
+```
