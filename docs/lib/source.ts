@@ -1,11 +1,10 @@
 import { loader } from 'fumadocs-core/source'
-import { createMDXSource } from 'fumadocs-mdx'
+import { toFumadocsSource } from 'fumadocs-mdx/runtime/server'
 import type { InferPageType } from 'fumadocs-core/source'
-import { docs, meta } from '@/.source'
+import { docs, meta } from '@/.source/server'
 
-export const source = loader({
+export const source = loader(toFumadocsSource(docs, meta), {
   baseUrl: '/docs',
-  source: createMDXSource(docs, meta),
 })
 
 export type Page = InferPageType<typeof source>
