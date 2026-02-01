@@ -16,21 +16,20 @@
  * ```
  */
 
-// Main client
-export { StromboliClient } from './client'
 export type {
-  StromboliClientOptions,
+  AsyncRunResponse,
+  HealthResponse,
+  Job,
   RunRequest,
   RunResponse,
-  AsyncRunResponse,
-  Job,
-  HealthResponse,
   Session,
+  StromboliClientOptions,
 } from './client'
+// Main client
+export { StromboliClient } from './client'
 
 // Errors
 export { StromboliError } from './errors'
-
-// Re-export generated types for advanced usage
-export type { paths, components } from './generated/types'
 export { createStromboliClient } from './generated/api'
+// Re-export generated types for advanced usage
+export type { components, paths } from './generated/types'

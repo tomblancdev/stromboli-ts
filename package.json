@@ -11,9 +11,7 @@
       "types": "./dist/index.d.ts"
     }
   },
-  "files": [
-    "dist"
-  ],
+  "files": ["dist"],
   "scripts": {
     "build": "bun build ./src/index.ts --outdir ./dist --target node",
     "test": "bun test",
@@ -23,20 +21,13 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "generate": "bun run scripts/generate.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "bunx tsc --noEmit"
   },
   "stromboli": {
     "apiVersion": "0.2.0",
     "apiVersionRange": ">=0.2.0 <0.3.0"
   },
-  "keywords": [
-    "stromboli",
-    "claude",
-    "anthropic",
-    "container",
-    "orchestration",
-    "sdk"
-  ],
+  "keywords": ["stromboli", "claude", "anthropic", "container", "orchestration", "sdk"],
   "author": "Tom Blanc",
   "license": "MIT",
   "repository": {

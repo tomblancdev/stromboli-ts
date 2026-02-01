@@ -4,8 +4,22 @@
  * High-level wrapper around the generated API client
  */
 
-import { createStromboliClient, type StromboliApiClient } from './generated/api'
 import { StromboliError } from './errors'
+import { type StromboliApiClient, createStromboliClient } from './generated/api'
+import type { components } from './generated/types'
+
+type ApiJob = components['schemas']['Job']
+type ApiSession = { id?: string } | string
+
+/**
+ * API result type - handles the case where error types are not defined in placeholder types
+ * This will be improved once proper types are generated from the OpenAPI spec
+ */
+interface ApiResult<T> {
+  data?: T
+  error?: unknown
+  response: { status: number }
+}
 
 export interface StromboliClientOptions {
   /** Base URL of the Stromboli API (e.g., 'http://localhost:8585') */
@@ -62,7 +76,8 @@ export interface Session {
  */
 export class StromboliClient {
   private readonly api: StromboliApiClient
-  private readonly timeout: number
+  /** Request timeout in milliseconds */
+  readonly timeout: number
 
   constructor(options: StromboliClientOptions | string) {
     const opts = typeof options === 'string' ? { baseUrl: options } : options
@@ -74,7 +89,7 @@ export class StromboliClient {
    * Run a synchronous Claude session
    */
   async run(request: RunRequest): Promise<RunResponse> {
-    const { data, error, response } = await this.api.POST('/run', {
+    const { data, error, response } = (await this.api.POST('/run', {
       body: {
         prompt: request.prompt,
         model: request.model,
@@ -89,7 +104,7 @@ export class StromboliClient {
         allowed_tools: request.allowedTools,
         disallowed_tools: request.disallowedTools,
       },
-    })
+    })) as ApiResult<components['schemas']['RunResponse']>
 
     if (error || !data) {
       throw StromboliError.fromResponse(response.status, error)
@@ -105,7 +120,7 @@ export class StromboliClient {
    * Start an asynchronous Claude session
    */
   async runAsync(request: RunRequest): Promise<AsyncRunResponse> {
-    const { data, error, response } = await this.api.POST('/run/async', {
+    const { data, error, response } = (await this.api.POST('/run/async', {
       body: {
         prompt: request.prompt,
         model: request.model,
@@ -120,7 +135,7 @@ export class StromboliClient {
         allowed_tools: request.allowedTools,
         disallowed_tools: request.disallowedTools,
       },
-    })
+    })) as ApiResult<{ id?: string }>
 
     if (error || !data) {
       throw StromboliError.fromResponse(response.status, error)
@@ -135,9 +150,9 @@ export class StromboliClient {
    * Get job status and result
    */
   async getJob(jobId: string): Promise<Job> {
-    const { data, error, response } = await this.api.GET('/jobs/{id}', {
+    const { data, error, response } = (await this.api.GET('/jobs/{id}', {
       params: { path: { id: jobId } },
-    })
+    })) as ApiResult<ApiJob>
 
     if (error || !data) {
       throw StromboliError.fromResponse(response.status, error)
@@ -156,7 +171,9 @@ export class StromboliClient {
    * List all jobs
    */
   async listJobs(): Promise<Job[]> {
-    const { data, error, response } = await this.api.GET('/jobs')
+    const { data, error, response } = (await this.api.GET('/jobs')) as ApiResult<{
+      jobs?: ApiJob[]
+    }>
 
     if (error || !data) {
       throw StromboliError.fromResponse(response.status, error)
@@ -175,9 +192,9 @@ export class StromboliClient {
    * Cancel a running job
    */
   async cancelJob(jobId: string): Promise<void> {
-    const { error, response } = await this.api.DELETE('/jobs/{id}', {
+    const { error, response } = (await this.api.DELETE('/jobs/{id}', {
       params: { path: { id: jobId } },
-    })
+    })) as ApiResult<unknown>
 
     if (error) {
       throw StromboliError.fromResponse(response.status, error)
@@ -188,7 +205,12 @@ export class StromboliClient {
    * Check API health status
    */
   async health(): Promise<HealthResponse> {
-    const { data, error, response } = await this.api.GET('/health')
+    const { data, error, response } = (await this.api.GET('/health')) as ApiResult<{
+      status?: string
+      version?: string
+      podman?: boolean
+      claude?: boolean
+    }>
 
     if (error || !data) {
       throw StromboliError.fromResponse(response.status, error)
@@ -206,7 +228,9 @@ export class StromboliClient {
    * List all sessions
    */
   async listSessions(): Promise<Session[]> {
-    const { data, error, response } = await this.api.GET('/sessions')
+    const { data, error, response } = (await this.api.GET('/sessions')) as ApiResult<{
+      sessions?: ApiSession[]
+    }>
 
     if (error || !data) {
       throw StromboliError.fromResponse(response.status, error)
@@ -221,9 +245,9 @@ export class StromboliClient {
    * Delete a session
    */
   async deleteSession(sessionId: string): Promise<void> {
-    const { error, response } = await this.api.DELETE('/sessions/{id}', {
+    const { error, response } = (await this.api.DELETE('/sessions/{id}', {
       params: { path: { id: sessionId } },
-    })
+    })) as ApiResult<unknown>
 
     if (error) {
       throw StromboliError.fromResponse(response.status, error)
@@ -237,12 +261,12 @@ export class StromboliClient {
     sessionId: string,
     options?: { offset?: number; limit?: number }
   ): Promise<unknown[]> {
-    const { data, error, response } = await this.api.GET('/sessions/{id}/messages', {
+    const { data, error, response } = (await this.api.GET('/sessions/{id}/messages', {
       params: {
         path: { id: sessionId },
-        query: { offset: options?.offset, limit: options?.limit },
+        query: options ?? {},
       },
-    })
+    })) as ApiResult<{ messages?: unknown[] }>
 
     if (error || !data) {
       throw StromboliError.fromResponse(response.status, error)

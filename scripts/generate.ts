@@ -19,7 +19,7 @@ interface PackageJson {
 }
 
 async function getApiVersion(): Promise<string> {
-  const pkg = await Bun.file(join(import.meta.dir, '..', 'package.json')).json() as PackageJson
+  const pkg = (await Bun.file(join(import.meta.dir, '..', 'package.json')).json()) as PackageJson
   return pkg.stromboli.apiVersion
 }
 

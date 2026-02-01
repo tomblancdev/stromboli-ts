@@ -10,9 +10,9 @@ WORKDIR := /app
 build-image:
 	podman build -t $(IMAGE_NAME) -f Containerfile .
 
-# Run a command inside the container
+# Run a command inside the container (with dependency install)
 define run_in_container
-	podman run --rm -v $(PWD):$(WORKDIR):Z -w $(WORKDIR) $(IMAGE_NAME) $(1)
+	podman run --rm -v $(PWD):$(WORKDIR):Z -w $(WORKDIR) $(IMAGE_NAME) /bin/bash -c "bun install --frozen-lockfile 2>/dev/null || bun install && $(1)"
 endef
 
 # Development
@@ -48,7 +48,7 @@ test: build-image
 
 .PHONY: test-watch
 test-watch: build-image
-	podman run --rm -it -v $(PWD):$(WORKDIR):Z -w $(WORKDIR) $(IMAGE_NAME) bun test --watch
+	podman run --rm -it -v $(PWD):$(WORKDIR):Z -w $(WORKDIR) $(IMAGE_NAME) /bin/bash -c "bun install && bun test --watch"
 
 .PHONY: test-coverage
 test-coverage: build-image
@@ -70,12 +70,12 @@ generate: build-image
 # Install dependencies (inside container)
 .PHONY: install
 install: build-image
-	$(call run_in_container,bun install)
+	$(call run_in_container,echo 'Dependencies installed')
 
 # Clean
 .PHONY: clean
 clean:
-	rm -rf dist coverage node_modules
+	rm -rf dist coverage node_modules bun.lockb
 
 .PHONY: clean-image
 clean-image:

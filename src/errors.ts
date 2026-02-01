@@ -13,8 +13,10 @@ export class StromboliError extends Error {
     super(message)
 
     // Maintains proper stack trace for where error was thrown (V8 engines)
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, StromboliError)
+    if ('captureStackTrace' in Error) {
+      ;(
+        Error as unknown as { captureStackTrace: (err: Error, ctor: unknown) => void }
+      ).captureStackTrace(this, StromboliError)
     }
   }
 
@@ -22,9 +24,10 @@ export class StromboliError extends Error {
    * Create an error from an HTTP response
    */
   static fromResponse(status: number, body: unknown): StromboliError {
-    const message = typeof body === 'object' && body !== null && 'error' in body
-      ? String((body as { error: unknown }).error)
-      : `HTTP ${status}`
+    const message =
+      typeof body === 'object' && body !== null && 'error' in body
+        ? String((body as { error: unknown }).error)
+        : `HTTP ${status}`
 
     return new StromboliError(message, 'HTTP_ERROR', status, body)
   }
@@ -33,21 +36,13 @@ export class StromboliError extends Error {
    * Create a network error
    */
   static networkError(cause: unknown): StromboliError {
-    return new StromboliError(
-      'Network request failed',
-      'NETWORK_ERROR',
-      undefined,
-      cause
-    )
+    return new StromboliError('Network request failed', 'NETWORK_ERROR', undefined, cause)
   }
 
   /**
    * Create a timeout error
    */
   static timeoutError(timeout: number): StromboliError {
-    return new StromboliError(
-      `Request timed out after ${timeout}ms`,
-      'TIMEOUT_ERROR'
-    )
+    return new StromboliError(`Request timed out after ${timeout}ms`, 'TIMEOUT_ERROR')
   }
 }
