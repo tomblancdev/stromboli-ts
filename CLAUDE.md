@@ -86,6 +86,44 @@ make test-e2e       # E2E tests (real Stromboli)
 make test-coverage  # Target: 90%+
 ```
 
+### 📚 Documentation First
+
+**Documentation is the key to a great SDK.** Always document everything.
+
+Every public API must have:
+- **JSDoc comment** with description
+- **@param** for each parameter
+- **@returns** describing the return value
+- **@throws** for possible errors
+- **@example** with working code snippet
+
+```typescript
+// ✅ Good
+/**
+ * Run Claude synchronously in a container.
+ *
+ * Executes the prompt and waits for completion before returning.
+ * For long-running tasks, consider using {@link runAsync} instead.
+ *
+ * @param request - The run configuration
+ * @returns The execution result with output and session info
+ * @throws {StromboliError} When the API returns an error
+ *
+ * @example
+ * ```typescript
+ * const result = await client.run({
+ *   prompt: 'Hello!',
+ *   model: 'haiku',
+ * })
+ * console.log(result.result)
+ * ```
+ */
+async run(request: RunRequest): Promise<RunResponse>
+
+// ❌ Bad
+async run(request: RunRequest): Promise<RunResponse>
+```
+
 ### 🎯 KISS - Keep It Simple
 
 Two layers only:
