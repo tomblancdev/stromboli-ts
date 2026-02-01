@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.1-alpha] - 2025-02-01
 
 ### Added
 
@@ -74,5 +74,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Full TypeScript support with generated types
 - MSW-based test mocking
 
-[Unreleased]: https://github.com/tomblancdev/stromboli-ts/compare/v0.1.0...HEAD
+[0.1.1-alpha]: https://github.com/tomblancdev/stromboli-ts/compare/v0.1.0...v0.1.1-alpha
 [0.1.0]: https://github.com/tomblancdev/stromboli-ts/releases/tag/v0.1.0
