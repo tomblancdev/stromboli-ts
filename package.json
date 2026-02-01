@@ -1,6 +1,6 @@
 {
   "name": "@tomblancdev/stromboli-ts",
-  "version": "0.1.1-alpha",
+  "version": "0.1.2-alpha",
   "description": "Official TypeScript SDK for Stromboli - Container orchestration for Claude Code agents",
   "type": "module",
   "main": "./dist/index.js",
