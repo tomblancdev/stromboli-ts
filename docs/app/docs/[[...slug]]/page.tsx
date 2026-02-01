@@ -15,11 +15,10 @@ export default async function Page(props: {
   const page = source.getPage(params.slug)
   if (!page) notFound()
 
-  // In fumadocs-mdx v11+, use load() to get the MDX body
-  const { body: MDX, toc } = await page.data.load()
+  const MDX = page.data.body
 
   return (
-    <DocsPage toc={toc} full={page.data.full}>
+    <DocsPage toc={page.data.toc} full={page.data.full}>
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription>{page.data.description}</DocsDescription>
       <DocsBody>
