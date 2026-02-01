@@ -89,7 +89,7 @@
  * The main Stromboli client class.
  * @see {@link StromboliClient}
  */
-export { StromboliClient } from './client'
+export { StromboliClient, isCompatible, SDK_VERSION, API_VERSION_RANGE } from './client'
 
 // ============================================================================
 // Client Types
@@ -115,6 +115,14 @@ export type {
   JobListResponse,
   /** Health check response */
   HealthResponse,
+  /** Claude configuration status */
+  ClaudeStatusResponse,
+  /** List of available secrets */
+  SecretsListResponse,
+  /** JWT token response */
+  TokenResponse,
+  /** Token validation response */
+  ValidateResponse,
   /** List of sessions */
   SessionListResponse,
   /** Session messages response */
@@ -127,6 +135,10 @@ export type {
   PodmanOptions,
   /** Job status enum values */
   JobStatus,
+  /** Options for waiting for job completion */
+  WaitForJobOptions,
+  /** Streaming event from Claude output */
+  StreamEvent,
 } from './client'
 
 // ============================================================================

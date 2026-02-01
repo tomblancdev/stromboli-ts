@@ -28,6 +28,10 @@ type Message = components['schemas']['stromboli_internal_history.Message']
 type MessageContent = components['schemas']['stromboli_internal_history.MessageContent']
 type ContentBlock = components['schemas']['stromboli_internal_history.ContentBlock']
 type ErrorResponse = components['schemas']['internal_api.ErrorResponse']
+type SecretsListResponse = components['schemas']['internal_api.SecretsListResponse']
+type TokenResponse = components['schemas']['internal_api.TokenResponse']
+type ValidateResponse = components['schemas']['internal_api.ValidateResponse']
+type ClaudeStatusResponse = components['schemas']['internal_api.ClaudeStatusResponse']
 
 // ============================================================================
 // ID Generators
@@ -339,6 +343,69 @@ export function createErrorResponse(
 ): ErrorResponse {
   return {
     error: message,
+    ...overrides,
+  }
+}
+
+// ============================================================================
+// Secrets Factories
+// ============================================================================
+
+/**
+ * Create a mock SecretsListResponse.
+ */
+export function createSecretsListResponse(
+  count = 3,
+  overrides: Partial<SecretsListResponse> = {}
+): SecretsListResponse {
+  const secretNames = ['github-token', 'gitlab-token', 'npm-token', 'docker-token']
+  return {
+    secrets: secretNames.slice(0, count),
+    error: undefined,
+    ...overrides,
+  }
+}
+
+// ============================================================================
+// Auth Factories
+// ============================================================================
+
+/**
+ * Create a mock TokenResponse.
+ */
+export function createTokenResponse(overrides: Partial<TokenResponse> = {}): TokenResponse {
+  return {
+    access_token: `access-${faker.string.alphanumeric(32)}`,
+    refresh_token: `refresh-${faker.string.alphanumeric(32)}`,
+    token_type: 'Bearer',
+    expires_in: 3600,
+    ...overrides,
+  }
+}
+
+/**
+ * Create a mock ValidateResponse.
+ */
+export function createValidateResponse(
+  overrides: Partial<ValidateResponse> = {}
+): ValidateResponse {
+  return {
+    valid: true,
+    subject: `client-${faker.string.alphanumeric(8)}`,
+    expires_at: Math.floor(Date.now() / 1000) + 3600,
+    ...overrides,
+  }
+}
+
+/**
+ * Create a mock ClaudeStatusResponse.
+ */
+export function createClaudeStatusResponse(
+  overrides: Partial<ClaudeStatusResponse> = {}
+): ClaudeStatusResponse {
+  return {
+    configured: true,
+    message: 'Claude is configured',
     ...overrides,
   }
 }

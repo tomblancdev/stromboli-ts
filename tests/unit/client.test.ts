@@ -422,4 +422,289 @@ describe('StromboliClient', () => {
       await expect(client.getSessionMessages('sess-nonexistent')).rejects.toThrow(StromboliError)
     })
   })
+
+  // ==========================================================================
+  // Error Handling Tests
+  // ==========================================================================
+
+  describe('error handling', () => {
+    it('should throw NETWORK_ERROR on connection failure', async () => {
+      server.use(
+        http.get(`${MOCK_BASE_URL}/health`, () => {
+          return HttpResponse.error()
+        })
+      )
+
+      const client = createClient()
+
+      await expect(client.health()).rejects.toMatchObject({
+        code: 'NETWORK_ERROR',
+      })
+    })
+
+    it('should throw TIMEOUT_ERROR when request exceeds timeout', async () => {
+      server.use(
+        http.get(`${MOCK_BASE_URL}/health`, async () => {
+          // Wait longer than the timeout
+          await new Promise((r) => setTimeout(r, 200))
+          return HttpResponse.json(createHealthResponse())
+        })
+      )
+
+      const client = new StromboliClient({
+        baseUrl: MOCK_BASE_URL,
+        timeout: 50, // Very short timeout
+      })
+
+      await expect(client.health()).rejects.toMatchObject({
+        code: 'TIMEOUT_ERROR',
+      })
+    })
+
+    it('should retry on 5xx errors', async () => {
+      let attempts = 0
+
+      server.use(
+        http.get(`${MOCK_BASE_URL}/health`, () => {
+          attempts++
+          if (attempts < 3) {
+            return HttpResponse.json(createErrorResponse('Server error'), { status: 500 })
+          }
+          return HttpResponse.json(createHealthResponse())
+        })
+      )
+
+      const client = new StromboliClient({
+        baseUrl: MOCK_BASE_URL,
+        retries: 3,
+        retryDelay: 10, // Fast retries for tests
+      })
+
+      const result = await client.health()
+      expect(result.status).toBe('ok')
+      expect(attempts).toBe(3)
+    })
+
+    it('should not retry on 4xx errors', async () => {
+      let attempts = 0
+
+      server.use(
+        http.get(`${MOCK_BASE_URL}/health`, () => {
+          attempts++
+          return HttpResponse.json(createErrorResponse('Bad request'), { status: 400 })
+        })
+      )
+
+      const client = new StromboliClient({
+        baseUrl: MOCK_BASE_URL,
+        retries: 3,
+        retryDelay: 10,
+      })
+
+      await expect(client.health()).rejects.toMatchObject({
+        code: 'HTTP_ERROR',
+        status: 400,
+      })
+      expect(attempts).toBe(1) // No retries
+    })
+
+    it('should respect max retries', async () => {
+      let attempts = 0
+
+      server.use(
+        http.get(`${MOCK_BASE_URL}/health`, () => {
+          attempts++
+          return HttpResponse.json(createErrorResponse('Server error'), { status: 500 })
+        })
+      )
+
+      const client = new StromboliClient({
+        baseUrl: MOCK_BASE_URL,
+        retries: 2,
+        retryDelay: 10,
+      })
+
+      await expect(client.health()).rejects.toMatchObject({
+        code: 'HTTP_ERROR',
+        status: 500,
+      })
+      expect(attempts).toBe(3) // Initial + 2 retries
+    })
+
+    it('should call onError interceptor', async () => {
+      let capturedError: StromboliError | undefined
+
+      server.use(
+        http.get(`${MOCK_BASE_URL}/health`, () => {
+          return HttpResponse.json(createErrorResponse('Server error'), { status: 500 })
+        })
+      )
+
+      const client = new StromboliClient({
+        baseUrl: MOCK_BASE_URL,
+        onError: (err) => {
+          capturedError = err
+        },
+      })
+
+      await expect(client.health()).rejects.toThrow()
+      expect(capturedError).toBeDefined()
+      expect(capturedError?.code).toBe('HTTP_ERROR')
+    })
+  })
+
+  // ==========================================================================
+  // Secrets Tests
+  // ==========================================================================
+
+  describe('listSecrets', () => {
+    it('should return list of secrets', async () => {
+      const client = createClient()
+      const { secrets } = await client.listSecrets()
+
+      expect(secrets).toBeDefined()
+      expect(Array.isArray(secrets)).toBe(true)
+      expect(secrets?.length).toBeGreaterThan(0)
+    })
+  })
+
+  // ==========================================================================
+  // Authentication Tests
+  // ==========================================================================
+
+  describe('authentication', () => {
+    it('should authenticate and store token', async () => {
+      const client = createClient()
+      const result = await client.authenticate('my-client-id')
+
+      expect(result.access_token).toBeDefined()
+      expect(result.refresh_token).toBeDefined()
+      expect(result.token_type).toBe('Bearer')
+      expect(client.getAuthToken()).toBe(result.access_token)
+    })
+
+    it('should set auth token manually', () => {
+      const client = createClient()
+      client.setAuthToken('manual-token')
+      expect(client.getAuthToken()).toBe('manual-token')
+    })
+
+    it('should refresh token', async () => {
+      const client = createClient()
+      const initial = await client.authenticate('my-client-id')
+      const refreshed = await client.refreshToken(initial.refresh_token ?? '')
+
+      expect(refreshed.access_token).toBeDefined()
+      expect(client.getAuthToken()).toBe(refreshed.access_token)
+    })
+
+    it('should clear token on logout', async () => {
+      const client = createClient()
+      await client.authenticate('my-client-id')
+      expect(client.getAuthToken()).toBeDefined()
+
+      await client.logout()
+      expect(client.getAuthToken()).toBeUndefined()
+    })
+  })
+
+  // ==========================================================================
+  // waitForJob Tests
+  // ==========================================================================
+
+  describe('waitForJob', () => {
+    it('should poll until job completes', async () => {
+      let pollCount = 0
+
+      server.use(
+        http.get(`${MOCK_BASE_URL}/jobs/:id`, ({ params }) => {
+          pollCount++
+          const status = pollCount >= 3 ? 'completed' : 'running'
+          return HttpResponse.json(
+            createJobResponse({
+              id: params.id as string,
+              status,
+            })
+          )
+        })
+      )
+
+      const client = createClient()
+      const result = await client.waitForJob('job-test', {
+        pollInterval: 10, // Fast polling for tests
+      })
+
+      expect(result.status).toBe('completed')
+      expect(pollCount).toBe(3)
+    })
+
+    it('should call onStatusChange callback', async () => {
+      const statusChanges: string[] = []
+      let pollCount = 0
+
+      server.use(
+        http.get(`${MOCK_BASE_URL}/jobs/:id`, ({ params }) => {
+          pollCount++
+          const status = pollCount >= 2 ? 'completed' : 'running'
+          return HttpResponse.json(
+            createJobResponse({
+              id: params.id as string,
+              status,
+            })
+          )
+        })
+      )
+
+      const client = createClient()
+      await client.waitForJob('job-test', {
+        pollInterval: 10,
+        onStatusChange: (status) => statusChanges.push(status),
+      })
+
+      expect(statusChanges).toEqual(['running', 'completed'])
+    })
+
+    it('should timeout after maxWaitTime', async () => {
+      server.use(
+        http.get(`${MOCK_BASE_URL}/jobs/:id`, ({ params }) => {
+          return HttpResponse.json(
+            createJobResponse({
+              id: params.id as string,
+              status: 'running', // Never completes
+            })
+          )
+        })
+      )
+
+      const client = createClient()
+
+      await expect(
+        client.waitForJob('job-test', {
+          pollInterval: 10,
+          maxWaitTime: 50, // Very short timeout
+        })
+      ).rejects.toMatchObject({
+        code: 'TIMEOUT_ERROR',
+      })
+    })
+  })
+
+  // ==========================================================================
+  // Streaming Tests
+  // ==========================================================================
+
+  describe('stream', () => {
+    it('should yield stream events', async () => {
+      const client = createClient()
+      const events: { type: string; data?: string }[] = []
+
+      for await (const event of client.stream({ prompt: 'Hello' })) {
+        events.push(event)
+        if (event.type === 'done') break
+      }
+
+      expect(events.length).toBeGreaterThan(0)
+      expect(events[events.length - 1].type).toBe('done')
+    })
+  })
 })

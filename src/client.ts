@@ -137,6 +137,33 @@ export type JobStatus = components['schemas']['stromboli_internal_job.Status']
  */
 export type ClaudeStatusResponse = components['schemas']['internal_api.ClaudeStatusResponse']
 
+/**
+ * List of available Podman secrets.
+ *
+ * @property secrets - Array of secret names (e.g., ['github-token', 'gitlab-token'])
+ * @property error - Error message if request failed
+ */
+export type SecretsListResponse = components['schemas']['internal_api.SecretsListResponse']
+
+/**
+ * JWT token response from authentication.
+ *
+ * @property access_token - JWT access token for API authentication
+ * @property refresh_token - Token for obtaining new access tokens
+ * @property token_type - Token type (typically 'Bearer')
+ * @property expires_in - Token expiration time in seconds
+ */
+export type TokenResponse = components['schemas']['internal_api.TokenResponse']
+
+/**
+ * Token validation response.
+ *
+ * @property valid - Whether the token is valid
+ * @property subject - Token subject (client ID)
+ * @property expires_at - Unix timestamp when token expires
+ */
+export type ValidateResponse = components['schemas']['internal_api.ValidateResponse']
+
 // ============================================================================
 // Internal Types
 // ============================================================================
@@ -163,6 +190,9 @@ interface ApiResult<T> {
  * const client = new StromboliClient({
  *   baseUrl: 'http://localhost:8585',
  *   timeout: 60000, // 1 minute
+ *   retries: 3,
+ *   retryDelay: 1000,
+ *   retryBackoff: 'exponential',
  * })
  * ```
  */
@@ -178,6 +208,53 @@ export interface StromboliClientOptions {
    * @default 30000
    */
   timeout?: number
+
+  /**
+   * Number of retry attempts for failed requests.
+   * Only retries on network errors and 5xx status codes.
+   * @default 0
+   */
+  retries?: number
+
+  /**
+   * Base delay between retries in milliseconds.
+   * @default 1000
+   */
+  retryDelay?: number
+
+  /**
+   * Backoff strategy for retries.
+   * - `linear` - Delay increases linearly (1s, 2s, 3s, ...)
+   * - `exponential` - Delay doubles each retry (1s, 2s, 4s, ...)
+   * @default 'exponential'
+   */
+  retryBackoff?: 'linear' | 'exponential'
+
+  /**
+   * Interceptor called before each request.
+   * Can be used to modify request options or add headers.
+   *
+   * @example
+   * ```typescript
+   * onRequest: (init) => ({
+   *   ...init,
+   *   headers: { ...init.headers, 'X-Custom': 'value' },
+   * })
+   * ```
+   */
+  onRequest?: (init: RequestInit) => RequestInit | Promise<RequestInit>
+
+  /**
+   * Interceptor called after each successful response.
+   * Can be used for logging or metrics.
+   */
+  onResponse?: (response: Response) => void | Promise<void>
+
+  /**
+   * Interceptor called when an error occurs.
+   * Can be used for error logging or reporting.
+   */
+  onError?: (error: StromboliError) => void
 }
 
 // ============================================================================
@@ -307,6 +384,113 @@ export interface SimpleRunRequest {
    * @example 'https://my-app.com/webhooks/stromboli'
    */
   webhookUrl?: string
+
+  // ==========================================================================
+  // Container Options
+  // ==========================================================================
+
+  /**
+   * Volume mounts in host:container or host:container:options format.
+   * @example ['/data:/data:ro', '/workspace:/workspace']
+   */
+  volumes?: string[]
+
+  /**
+   * Secrets to inject as environment variables.
+   * Map of env var name to Podman secret name.
+   * @example { 'GH_TOKEN': 'github-token' }
+   */
+  secretsEnv?: Record<string, string>
+
+  /**
+   * CPU limit for the container.
+   * @example '0.5' (half a CPU) or '2' (two CPUs)
+   */
+  cpus?: string
+
+  /**
+   * CPU shares (relative weight).
+   * @example 512 (half of default 1024)
+   */
+  cpuShares?: number
+
+  /**
+   * Custom container image to use.
+   * Must match allowed patterns configured in Stromboli.
+   * @example 'python:3.12'
+   */
+  image?: string
+
+  // ==========================================================================
+  // Agent Options
+  // ==========================================================================
+
+  /**
+   * Agent to use for the session.
+   * @example 'reviewer'
+   */
+  agent?: string
+
+  /**
+   * Custom agents definition as JSON object.
+   * @example { reviewer: { name: 'Code Reviewer', ... } }
+   */
+  agents?: Record<string, unknown>
+
+  /**
+   * Continue the most recent conversation in the workspace.
+   * Ignores `sessionId` when true.
+   * @default false
+   */
+  continueSession?: boolean
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+// Streaming Types
+// ============================================================================
+
+/**
+ * Event emitted during streaming output.
+ *
+ * @property type - Event type: 'content', 'tool_use', 'error', or 'done'
+ * @property data - Content data (for 'content' events)
+ * @property error - Error message (for 'error' events)
+ */
+export interface StreamEvent {
+  /** Event type */
+  type: 'content' | 'tool_use' | 'error' | 'done'
+  /** Content data for 'content' events */
+  data?: string
+  /** Error message for 'error' events */
+  error?: string
+}
+
+// ============================================================================
+// Wait For Job Options
+// ============================================================================
+
+/**
+ * Options for the waitForJob helper.
+ */
+export interface WaitForJobOptions {
+  /**
+   * Polling interval in milliseconds.
+   * @default 2000
+   */
+  pollInterval?: number
+
+  /**
+   * Maximum time to wait in milliseconds.
+   * @default 300000 (5 minutes)
+   */
+  maxWaitTime?: number
+
+  /**
+   * Callback invoked when job status changes.
+   */
+  onStatusChange?: (status: JobStatus) => void
 }
 
 // ============================================================================
@@ -326,17 +510,82 @@ function toApiRequest(request: SimpleRunRequest): RunRequest {
       model: request.model,
       session_id: request.sessionId,
       resume: request.resume,
+      continue: request.continueSession,
       max_budget_usd: request.maxBudgetUsd,
       system_prompt: request.systemPrompt,
       append_system_prompt: request.appendSystemPrompt,
       allowed_tools: request.allowedTools,
       disallowed_tools: request.disallowedTools,
+      agent: request.agent,
+      agents: request.agents,
     },
     podman: {
       timeout: request.timeout,
       memory: request.memory,
+      volumes: request.volumes,
+      secrets_env: request.secretsEnv,
+      cpus: request.cpus,
+      cpu_shares: request.cpuShares,
+      image: request.image,
     },
   }
+}
+
+// ============================================================================
+// Version Compatibility
+// ============================================================================
+
+/**
+ * SDK version string.
+ * @internal
+ */
+export const SDK_VERSION = '0.1.0'
+
+/**
+ * Compatible API version range (semver).
+ * The SDK is tested against APIs matching this range.
+ */
+export const API_VERSION_RANGE = '>=0.3.0-alpha'
+
+/**
+ * Check if an API version is compatible with this SDK.
+ *
+ * Uses basic semver comparison. Returns true if the API version
+ * is greater than or equal to the minimum required version.
+ *
+ * @param apiVersion - The API version to check (e.g., '0.3.0')
+ * @returns True if compatible, false otherwise
+ *
+ * @example
+ * ```typescript
+ * import { isCompatible } from 'stromboli-ts'
+ *
+ * const health = await client.health()
+ * if (!isCompatible(health.version ?? '')) {
+ *   console.warn(`API ${health.version} may not be compatible with this SDK`)
+ * }
+ * ```
+ */
+export function isCompatible(apiVersion: string): boolean {
+  // Parse versions, stripping any pre-release suffix for comparison
+  const parseVersion = (v: string): number[] => {
+    const clean = v.replace(/^[>=<~^]*/, '').replace(/-.*$/, '')
+    return clean.split('.').map((n) => Number.parseInt(n, 10) || 0)
+  }
+
+  const minVersion = parseVersion(API_VERSION_RANGE)
+  const currentVersion = parseVersion(apiVersion)
+
+  // Compare major.minor.patch
+  for (let i = 0; i < 3; i++) {
+    const min = minVersion[i] ?? 0
+    const cur = currentVersion[i] ?? 0
+
+    if (cur > min) return true
+    if (cur < min) return false
+  }
+
+  return true // Equal versions are compatible
 }
 
 // ============================================================================
@@ -380,13 +629,23 @@ function toApiRequest(request: SimpleRunRequest): RunRequest {
  * })
  *
  * // Check job status
- * const status = await client.getJob(job.job_id!)
+ * const jobId = job.job_id ?? ''
+ * const status = await client.getJob(jobId)
  * console.log(`Job ${status.id} is ${status.status}`)
  * ```
  */
 export class StromboliClient {
   /** @internal */
   private readonly api: StromboliApiClient
+
+  /** @internal */
+  private readonly baseUrl: string
+
+  /** @internal */
+  private readonly options: Required<
+    Pick<StromboliClientOptions, 'timeout' | 'retries' | 'retryDelay' | 'retryBackoff'>
+  > &
+    Pick<StromboliClientOptions, 'onRequest' | 'onResponse' | 'onError'>
 
   /**
    * Request timeout in milliseconds.
@@ -413,8 +672,113 @@ export class StromboliClient {
    */
   constructor(options: StromboliClientOptions | string) {
     const opts = typeof options === 'string' ? { baseUrl: options } : options
+    this.baseUrl = opts.baseUrl
     this.api = createStromboliClient(opts.baseUrl)
     this.timeout = opts.timeout ?? 30000
+    this.options = {
+      timeout: opts.timeout ?? 30000,
+      retries: opts.retries ?? 0,
+      retryDelay: opts.retryDelay ?? 1000,
+      retryBackoff: opts.retryBackoff ?? 'exponential',
+      onRequest: opts.onRequest,
+      onResponse: opts.onResponse,
+      onError: opts.onError,
+    }
+  }
+
+  // ==========================================================================
+  // Internal Request Handling
+  // ==========================================================================
+
+  /**
+   * Check if an error should trigger a retry.
+   * @internal
+   */
+  private shouldRetry(error: StromboliError, attempt: number): boolean {
+    if (attempt > this.options.retries) return false
+    // Retry on network errors and 5xx status codes
+    return error.code === 'NETWORK_ERROR' || (error.status !== undefined && error.status >= 500)
+  }
+
+  /**
+   * Calculate delay before next retry.
+   * @internal
+   */
+  private getRetryDelay(attempt: number): number {
+    return this.options.retryBackoff === 'exponential'
+      ? this.options.retryDelay * 2 ** (attempt - 1)
+      : this.options.retryDelay * attempt
+  }
+
+  /**
+   * Execute a request with timeout, error handling, and retry logic.
+   * @internal
+   */
+  private async request<T>(
+    fn: (signal: AbortSignal) => Promise<ApiResult<T>>,
+    attempt = 1
+  ): Promise<T> {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), this.options.timeout)
+
+    try {
+      // Call onRequest interceptor if provided
+      if (this.options.onRequest) {
+        await this.options.onRequest({ signal: controller.signal })
+      }
+
+      const result = await fn(controller.signal)
+      const { data, error, response } = result
+
+      // Call onResponse interceptor if provided
+      if (this.options.onResponse && response) {
+        await this.options.onResponse(response as unknown as Response)
+      }
+
+      if (error || !data) {
+        const stromboliError = StromboliError.fromResponse(response.status, error)
+        this.options.onError?.(stromboliError)
+
+        // Retry on 5xx errors
+        if (this.shouldRetry(stromboliError, attempt)) {
+          clearTimeout(timeoutId)
+          await new Promise((r) => setTimeout(r, this.getRetryDelay(attempt)))
+          return this.request(fn, attempt + 1)
+        }
+
+        throw stromboliError
+      }
+
+      return data
+    } catch (err) {
+      clearTimeout(timeoutId)
+
+      // Re-throw StromboliError as-is (already handled above)
+      if (err instanceof StromboliError) {
+        throw err
+      }
+
+      // Handle timeout (AbortError)
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        const timeoutError = StromboliError.timeoutError(this.options.timeout)
+        this.options.onError?.(timeoutError)
+        throw timeoutError
+      }
+
+      // Handle network errors (fetch failures, DNS errors, etc.)
+      const networkError = StromboliError.networkError(err)
+      this.options.onError?.(networkError)
+
+      // Retry on network errors
+      if (this.shouldRetry(networkError, attempt)) {
+        await new Promise((r) => setTimeout(r, this.getRetryDelay(attempt)))
+        return this.request(fn, attempt + 1)
+      }
+
+      throw networkError
+    } finally {
+      clearTimeout(timeoutId)
+    }
   }
 
   /**
@@ -458,15 +822,13 @@ export class StromboliClient {
   async run(request: SimpleRunRequest | RunRequest): Promise<RunResponse> {
     const apiRequest = 'claude' in request ? request : toApiRequest(request)
 
-    const { data, error, response } = (await this.api.POST('/run', {
-      body: apiRequest,
-    })) as ApiResult<RunResponse>
-
-    if (error || !data) {
-      throw StromboliError.fromResponse(response.status, error)
-    }
-
-    return data
+    return this.request(
+      (signal) =>
+        this.api.POST('/run', {
+          body: apiRequest,
+          signal,
+        }) as Promise<ApiResult<RunResponse>>
+    )
   }
 
   /**
@@ -510,15 +872,13 @@ export class StromboliClient {
   async runAsync(request: SimpleRunRequest | RunRequest): Promise<AsyncRunResponse> {
     const apiRequest = 'claude' in request ? request : toApiRequest(request)
 
-    const { data, error, response } = (await this.api.POST('/run/async', {
-      body: apiRequest,
-    })) as ApiResult<AsyncRunResponse>
-
-    if (error || !data) {
-      throw StromboliError.fromResponse(response.status, error)
-    }
-
-    return data
+    return this.request(
+      (signal) =>
+        this.api.POST('/run/async', {
+          body: apiRequest,
+          signal,
+        }) as Promise<ApiResult<AsyncRunResponse>>
+    )
   }
 
   /**
@@ -549,15 +909,13 @@ export class StromboliClient {
    * @see {@link listJobs} - To list all jobs
    */
   async getJob(jobId: string): Promise<JobResponse> {
-    const { data, error, response } = (await this.api.GET('/jobs/{id}', {
-      params: { path: { id: jobId } },
-    })) as ApiResult<JobResponse>
-
-    if (error || !data) {
-      throw StromboliError.fromResponse(response.status, error)
-    }
-
-    return data
+    return this.request(
+      (signal) =>
+        this.api.GET('/jobs/{id}', {
+          params: { path: { id: jobId } },
+          signal,
+        }) as Promise<ApiResult<JobResponse>>
+    )
   }
 
   /**
@@ -582,13 +940,9 @@ export class StromboliClient {
    * @see {@link cancelJob} - To cancel a job
    */
   async listJobs(): Promise<JobListResponse> {
-    const { data, error, response } = (await this.api.GET('/jobs')) as ApiResult<JobListResponse>
-
-    if (error || !data) {
-      throw StromboliError.fromResponse(response.status, error)
-    }
-
-    return data
+    return this.request(
+      (signal) => this.api.GET('/jobs', { signal }) as Promise<ApiResult<JobListResponse>>
+    )
   }
 
   /**
@@ -607,13 +961,13 @@ export class StromboliClient {
    * @see {@link getJob} - To check job status
    */
   async cancelJob(jobId: string): Promise<void> {
-    const { error, response } = (await this.api.DELETE('/jobs/{id}', {
-      params: { path: { id: jobId } },
-    })) as ApiResult<unknown>
-
-    if (error) {
-      throw StromboliError.fromResponse(response.status, error)
-    }
+    await this.request(
+      (signal) =>
+        this.api.DELETE('/jobs/{id}', {
+          params: { path: { id: jobId } },
+          signal,
+        }) as Promise<ApiResult<unknown>>
+    )
   }
 
   /**
@@ -640,13 +994,9 @@ export class StromboliClient {
    * @see {@link claudeStatus} - To check Claude configuration specifically
    */
   async health(): Promise<HealthResponse> {
-    const { data, error, response } = (await this.api.GET('/health')) as ApiResult<HealthResponse>
-
-    if (error || !data) {
-      throw StromboliError.fromResponse(response.status, error)
-    }
-
-    return data
+    return this.request(
+      (signal) => this.api.GET('/health', { signal }) as Promise<ApiResult<HealthResponse>>
+    )
   }
 
   /**
@@ -671,15 +1021,9 @@ export class StromboliClient {
    * @see {@link getSessionMessages} - To view session history
    */
   async listSessions(): Promise<SessionListResponse> {
-    const { data, error, response } = (await this.api.GET(
-      '/sessions'
-    )) as ApiResult<SessionListResponse>
-
-    if (error || !data) {
-      throw StromboliError.fromResponse(response.status, error)
-    }
-
-    return data
+    return this.request(
+      (signal) => this.api.GET('/sessions', { signal }) as Promise<ApiResult<SessionListResponse>>
+    )
   }
 
   /**
@@ -701,15 +1045,13 @@ export class StromboliClient {
    * @see {@link listSessions} - To list all sessions
    */
   async deleteSession(sessionId: string): Promise<SessionDestroyResponse> {
-    const { data, error, response } = (await this.api.DELETE('/sessions/{id}', {
-      params: { path: { id: sessionId } },
-    })) as ApiResult<SessionDestroyResponse>
-
-    if (error || !data) {
-      throw StromboliError.fromResponse(response.status, error)
-    }
-
-    return data
+    return this.request(
+      (signal) =>
+        this.api.DELETE('/sessions/{id}', {
+          params: { path: { id: sessionId } },
+          signal,
+        }) as Promise<ApiResult<SessionDestroyResponse>>
+    )
   }
 
   /**
@@ -748,18 +1090,16 @@ export class StromboliClient {
     sessionId: string,
     options?: { offset?: number; limit?: number }
   ): Promise<SessionMessagesResponse> {
-    const { data, error, response } = (await this.api.GET('/sessions/{id}/messages', {
-      params: {
-        path: { id: sessionId },
-        query: options,
-      },
-    })) as ApiResult<SessionMessagesResponse>
-
-    if (error || !data) {
-      throw StromboliError.fromResponse(response.status, error)
-    }
-
-    return data
+    return this.request(
+      (signal) =>
+        this.api.GET('/sessions/{id}/messages', {
+          params: {
+            path: { id: sessionId },
+            query: options,
+          },
+          signal,
+        }) as Promise<ApiResult<SessionMessagesResponse>>
+    )
   }
 
   /**
@@ -785,14 +1125,390 @@ export class StromboliClient {
    * @see {@link health} - For overall API health
    */
   async claudeStatus(): Promise<ClaudeStatusResponse> {
-    const { data, error, response } = (await this.api.GET(
-      '/claude/status'
-    )) as ApiResult<ClaudeStatusResponse>
+    return this.request(
+      (signal) =>
+        this.api.GET('/claude/status', { signal }) as Promise<ApiResult<ClaudeStatusResponse>>
+    )
+  }
 
-    if (error || !data) {
-      throw StromboliError.fromResponse(response.status, error)
+  // ==========================================================================
+  // Secrets Management
+  // ==========================================================================
+
+  /**
+   * List all available Podman secrets.
+   *
+   * These secrets can be injected into containers using the
+   * `secretsEnv` option in {@link run} or {@link runAsync}.
+   *
+   * @returns List of available secret names
+   * @throws {StromboliError} When the API returns an error
+   *
+   * @example
+   * ```typescript
+   * const { secrets } = await client.listSecrets()
+   *
+   * for (const secret of secrets ?? []) {
+   *   console.log(`Secret: ${secret}`)
+   * }
+   *
+   * // Use a secret in a run
+   * if (secrets?.includes('github-token')) {
+   *   await client.run({
+   *     prompt: 'Clone a private repo',
+   *     secretsEnv: { 'GH_TOKEN': 'github-token' },
+   *   })
+   * }
+   * ```
+   */
+  async listSecrets(): Promise<SecretsListResponse> {
+    return this.request(
+      (signal) => this.api.GET('/secrets', { signal }) as Promise<ApiResult<SecretsListResponse>>
+    )
+  }
+
+  // ==========================================================================
+  // Authentication
+  // ==========================================================================
+
+  /** @internal */
+  private authToken?: string
+
+  /**
+   * Set the authentication token for API requests.
+   *
+   * Use this to manually set a token obtained through other means.
+   * For new authentication, use {@link authenticate} instead.
+   *
+   * @param token - JWT access token
+   *
+   * @example
+   * ```typescript
+   * // Set token from environment
+   * client.setAuthToken(process.env.STROMBOLI_TOKEN!)
+   * ```
+   */
+  setAuthToken(token: string): void {
+    this.authToken = token
+  }
+
+  /**
+   * Get the current authentication token.
+   *
+   * @returns The current JWT access token, or undefined if not authenticated
+   */
+  getAuthToken(): string | undefined {
+    return this.authToken
+  }
+
+  /**
+   * Authenticate with the Stromboli API using client credentials.
+   *
+   * On success, stores the access token for subsequent requests.
+   *
+   * @param clientId - API client ID
+   * @returns Token response with access and refresh tokens
+   * @throws {StromboliError} When authentication fails
+   *
+   * @example
+   * ```typescript
+   * const tokens = await client.authenticate('my-client-id')
+   * console.log(`Authenticated! Token expires in ${tokens.expires_in}s`)
+   *
+   * // Token is automatically used for subsequent requests
+   * await client.run({ prompt: 'Hello!' })
+   * ```
+   *
+   * @see {@link refreshToken} - To refresh an expired token
+   * @see {@link logout} - To invalidate the token
+   */
+  async authenticate(clientId: string): Promise<TokenResponse> {
+    const response = await this.request(
+      (signal) =>
+        this.api.POST('/auth/token', {
+          body: { client_id: clientId },
+          signal,
+        }) as Promise<ApiResult<TokenResponse>>
+    )
+
+    if (response.access_token) {
+      this.authToken = response.access_token
     }
 
-    return data
+    return response
+  }
+
+  /**
+   * Refresh the authentication token.
+   *
+   * Use this to obtain a new access token before the current one expires.
+   *
+   * @param refreshToken - Refresh token from initial authentication
+   * @returns New token response
+   * @throws {StromboliError} When refresh fails
+   *
+   * @example
+   * ```typescript
+   * // Store refresh token during authentication
+   * const { refresh_token } = await client.authenticate('my-client-id')
+   *
+   * // Later, when access token is about to expire
+   * const newTokens = await client.refreshToken(refresh_token!)
+   * console.log(`New token expires in ${newTokens.expires_in}s`)
+   * ```
+   *
+   * @see {@link authenticate} - For initial authentication
+   */
+  async refreshToken(refreshToken: string): Promise<TokenResponse> {
+    const response = await this.request(
+      (signal) =>
+        this.api.POST('/auth/refresh', {
+          body: { refresh_token: refreshToken },
+          signal,
+        }) as Promise<ApiResult<TokenResponse>>
+    )
+
+    if (response.access_token) {
+      this.authToken = response.access_token
+    }
+
+    return response
+  }
+
+  /**
+   * Validate the current authentication token.
+   *
+   * @returns Validation response with token claims
+   * @throws {StromboliError} When token is invalid or expired
+   *
+   * @example
+   * ```typescript
+   * try {
+   *   const validation = await client.validateToken()
+   *   console.log(`Token valid for: ${validation.subject}`)
+   *   console.log(`Expires at: ${new Date(validation.expires_at! * 1000)}`)
+   * } catch (error) {
+   *   console.log('Token is invalid or expired')
+   * }
+   * ```
+   */
+  async validateToken(): Promise<ValidateResponse> {
+    return this.request(
+      (signal) => this.api.GET('/auth/validate', { signal }) as Promise<ApiResult<ValidateResponse>>
+    )
+  }
+
+  /**
+   * Logout and invalidate the current token.
+   *
+   * After calling this, the token will no longer be accepted by the API.
+   *
+   * @throws {StromboliError} When logout fails
+   *
+   * @example
+   * ```typescript
+   * await client.logout()
+   * console.log('Logged out successfully')
+   * ```
+   *
+   * @see {@link authenticate} - To authenticate again
+   */
+  async logout(): Promise<void> {
+    await this.request(
+      (signal) => this.api.POST('/auth/logout', { signal }) as Promise<ApiResult<unknown>>
+    )
+    this.authToken = undefined
+  }
+
+  // ==========================================================================
+  // Streaming
+  // ==========================================================================
+
+  /**
+   * Execute Claude and stream output in real-time.
+   *
+   * This is an async generator that yields events as Claude produces output.
+   * Useful for showing progress during long-running tasks.
+   *
+   * @param request - Run configuration (simple or full format)
+   * @yields Stream events with Claude's output
+   * @throws {StromboliError} When the API returns an error
+   *
+   * @example
+   * ```typescript
+   * for await (const event of client.stream({
+   *   prompt: 'Count from 1 to 10 slowly',
+   *   model: 'haiku',
+   * })) {
+   *   if (event.type === 'content') {
+   *     process.stdout.write(event.data ?? '')
+   *   } else if (event.type === 'error') {
+   *     console.error('Error:', event.error)
+   *   }
+   * }
+   * console.log('\nDone!')
+   * ```
+   *
+   * @see {@link run} - For non-streaming execution
+   */
+  async *stream(request: SimpleRunRequest | RunRequest): AsyncGenerator<StreamEvent> {
+    const apiRequest = 'claude' in request ? request : toApiRequest(request)
+
+    // Build query params for GET /run/stream
+    const params = new URLSearchParams({
+      prompt: apiRequest.prompt,
+    })
+
+    if (apiRequest.workdir) {
+      params.set('workdir', apiRequest.workdir)
+    }
+
+    if (apiRequest.claude?.session_id) {
+      params.set('session_id', apiRequest.claude.session_id)
+    }
+
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), this.options.timeout)
+
+    try {
+      // We need to use fetch directly for SSE streaming
+      const url = `${this.baseUrl}/run/stream?${params.toString()}`
+
+      const headers: Record<string, string> = {
+        Accept: 'text/event-stream',
+      }
+
+      if (this.authToken) {
+        headers.Authorization = `Bearer ${this.authToken}`
+      }
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers,
+        signal: controller.signal,
+      })
+
+      if (!response.ok) {
+        throw StromboliError.fromResponse(response.status, await response.text())
+      }
+
+      if (!response.body) {
+        throw new StromboliError('No response body', 'STREAM_ERROR')
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+
+        if (done) {
+          yield { type: 'done' }
+          break
+        }
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6)
+            if (data === '[DONE]') {
+              yield { type: 'done' }
+              return
+            }
+            yield { type: 'content', data }
+          } else if (line.startsWith('error: ')) {
+            yield { type: 'error', error: line.slice(7) }
+          }
+        }
+      }
+    } catch (err) {
+      if (err instanceof StromboliError) {
+        throw err
+      }
+
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        throw StromboliError.timeoutError(this.options.timeout)
+      }
+
+      throw StromboliError.networkError(err)
+    } finally {
+      clearTimeout(timeoutId)
+    }
+  }
+
+  // ==========================================================================
+  // Helpers
+  // ==========================================================================
+
+  /**
+   * Wait for an async job to complete.
+   *
+   * Polls the job status until it reaches a terminal state
+   * (completed, failed, crashed, or cancelled).
+   *
+   * @param jobId - The job ID to wait for
+   * @param options - Polling options
+   * @returns Final job response
+   * @throws {StromboliError} When polling times out or job fails
+   *
+   * @example
+   * ```typescript
+   * const job = await client.runAsync({
+   *   prompt: 'Long running task...',
+   * })
+   *
+   * const result = await client.waitForJob(job.job_id ?? '', {
+   *   pollInterval: 2000,
+   *   maxWaitTime: 300000, // 5 minutes
+   *   onStatusChange: (status) => console.log(`Status: ${status}`),
+   * })
+   *
+   * console.log('Result:', result.output)
+   * ```
+   *
+   * @see {@link runAsync} - To start an async job
+   * @see {@link getJob} - To check job status once
+   */
+  async waitForJob(jobId: string, options?: WaitForJobOptions): Promise<JobResponse> {
+    const pollInterval = options?.pollInterval ?? 2000
+    const maxWaitTime = options?.maxWaitTime ?? 300000
+    const startTime = Date.now()
+    let lastStatus: JobStatus | undefined
+
+    while (true) {
+      const job = await this.getJob(jobId)
+      const currentStatus = job.status
+
+      // Notify on status change
+      if (currentStatus !== lastStatus) {
+        options?.onStatusChange?.(currentStatus as JobStatus)
+        lastStatus = currentStatus as JobStatus
+      }
+
+      // Check for terminal states
+      if (
+        currentStatus === 'completed' ||
+        currentStatus === 'failed' ||
+        currentStatus === 'crashed' ||
+        currentStatus === 'cancelled'
+      ) {
+        return job
+      }
+
+      // Check timeout
+      if (Date.now() - startTime > maxWaitTime) {
+        throw new StromboliError(
+          `Job ${jobId} did not complete within ${maxWaitTime}ms`,
+          'TIMEOUT_ERROR'
+        )
+      }
+
+      // Wait before next poll
+      await new Promise((r) => setTimeout(r, pollInterval))
+    }
   }
 }

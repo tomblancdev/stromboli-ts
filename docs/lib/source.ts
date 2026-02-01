@@ -1,6 +1,6 @@
-import { docs, meta } from '../.source'
-import { resolveFiles } from 'fumadocs-mdx'
 import { loader } from 'fumadocs-core/source'
+import { resolveFiles } from 'fumadocs-mdx'
+import { docs, meta } from '../.source'
 
 export const source = loader({
   baseUrl: '/docs',
