@@ -636,6 +636,17 @@ describe('StromboliClient', () => {
 
       expect(capturedAuthHeader).toBe('Bearer test-token-123')
     })
+
+    it('should validate token', async () => {
+      const client = createClient()
+      await client.authenticate('my-client-id')
+
+      const validation = await client.validateToken()
+
+      expect(validation.valid).toBe(true)
+      expect(validation.subject).toBeDefined()
+      expect(validation.expires_at).toBeDefined()
+    })
   })
 
   // ==========================================================================
@@ -930,6 +941,169 @@ describe('StromboliClient', () => {
       await client.health()
 
       expect(callArgs).toEqual([{ attempt: 1, baseDelay: 1000 }])
+    })
+
+    it('should use exponential backoff by default', async () => {
+      const delays: number[] = []
+      let attempts = 0
+      const originalSetTimeout = global.setTimeout
+
+      server.use(
+        http.get(`${MOCK_BASE_URL}/health`, () => {
+          attempts++
+          if (attempts < 4) {
+            return HttpResponse.json(createErrorResponse('Server error'), { status: 500 })
+          }
+          return HttpResponse.json(createHealthResponse())
+        })
+      )
+
+      const client = new StromboliClient({
+        baseUrl: MOCK_BASE_URL,
+        retries: 4,
+        retryDelay: 100, // Base delay of 100ms
+        retryBackoff: 'exponential',
+        timeout: 60000, // Long timeout to avoid capturing it
+      })
+
+      // Track delays by intercepting setTimeout (only retry delays, not timeouts)
+      const mockSetTimeout = (fn: () => void, delay: number) => {
+        // Only capture retry delays (100-1000ms range), not the 60000ms timeout
+        if (delay >= 100 && delay < 1000) delays.push(delay)
+        return originalSetTimeout(fn, delay)
+      }
+      global.setTimeout = mockSetTimeout as typeof global.setTimeout
+
+      try {
+        await client.health()
+      } finally {
+        global.setTimeout = originalSetTimeout
+      }
+
+      // Exponential: 100, 200, 400 (base * 2^(attempt-1))
+      expect(delays).toEqual([100, 200, 400])
+    })
+
+    it('should use linear backoff when configured', async () => {
+      const delays: number[] = []
+      let attempts = 0
+      const originalSetTimeout = global.setTimeout
+
+      server.use(
+        http.get(`${MOCK_BASE_URL}/health`, () => {
+          attempts++
+          if (attempts < 4) {
+            return HttpResponse.json(createErrorResponse('Server error'), { status: 500 })
+          }
+          return HttpResponse.json(createHealthResponse())
+        })
+      )
+
+      const client = new StromboliClient({
+        baseUrl: MOCK_BASE_URL,
+        retries: 4,
+        retryDelay: 100, // Base delay of 100ms
+        retryBackoff: 'linear',
+        timeout: 60000, // Long timeout to avoid capturing it
+      })
+
+      // Track delays by intercepting setTimeout (only retry delays, not timeouts)
+      const mockSetTimeout = (fn: () => void, delay: number) => {
+        // Only capture retry delays (100-1000ms range), not the 60000ms timeout
+        if (delay >= 100 && delay < 1000) delays.push(delay)
+        return originalSetTimeout(fn, delay)
+      }
+      global.setTimeout = mockSetTimeout as typeof global.setTimeout
+
+      try {
+        await client.health()
+      } finally {
+        global.setTimeout = originalSetTimeout
+      }
+
+      // Linear: 100, 200, 300 (base * attempt)
+      expect(delays).toEqual([100, 200, 300])
+    })
+  })
+
+  // ==========================================================================
+  // SimpleRunRequest Conversion Tests
+  // ==========================================================================
+
+  describe('request conversion', () => {
+    it('should convert continueSession option', async () => {
+      let capturedBody: unknown
+
+      server.use(
+        http.post(`${MOCK_BASE_URL}/run`, async ({ request }) => {
+          capturedBody = await request.json()
+          return HttpResponse.json(createRunResponse())
+        })
+      )
+
+      const client = createClient()
+      await client.run({
+        prompt: 'Test',
+        continueSession: true,
+      })
+
+      expect(capturedBody).toMatchObject({
+        claude: {
+          continue: true,
+        },
+      })
+    })
+  })
+
+  // ==========================================================================
+  // Stream Cancellation Tests
+  // ==========================================================================
+
+  describe('stream cancellation', () => {
+    it('should abort stream when signal is aborted', async () => {
+      const client = createClient()
+      const controller = new AbortController()
+
+      // Abort after first event
+      let eventCount = 0
+      const events: { type: string }[] = []
+
+      try {
+        for await (const event of client.stream(
+          { prompt: 'Hello' },
+          { signal: controller.signal }
+        )) {
+          events.push(event)
+          eventCount++
+          if (eventCount >= 1) {
+            controller.abort()
+          }
+        }
+      } catch (error) {
+        expect((error as StromboliError).code).toBe('ABORTED')
+      }
+
+      expect(events.length).toBeGreaterThan(0)
+    })
+
+    it('should throw immediately if signal already aborted', async () => {
+      const client = createClient()
+      const controller = new AbortController()
+      controller.abort()
+
+      try {
+        for await (const event of client.stream(
+          { prompt: 'Hello' },
+          { signal: controller.signal }
+        )) {
+          // Should not reach here
+          expect(event).toBeUndefined()
+        }
+        // Should not reach here
+        expect(true).toBe(false)
+      } catch (error) {
+        expect((error as StromboliError).code).toBe('ABORTED')
+      }
     })
   })
 })

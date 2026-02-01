@@ -10,6 +10,7 @@
 import { StromboliError } from './errors'
 import { type StromboliApiClient, createStromboliClient } from './generated/api'
 import type { components } from './generated/types'
+import packageJson from '../package.json' with { type: 'json' }
 
 // ============================================================================
 // Type Aliases
@@ -638,6 +639,33 @@ export interface StreamOptions {
    * @default 60000
    */
   idleTimeout?: number
+
+  /**
+   * Maximum total duration in milliseconds.
+   * The stream will be aborted after this time regardless of activity.
+   * Use this to prevent runaway streams.
+   * @default undefined (no limit)
+   */
+  maxDuration?: number
+
+  /**
+   * AbortSignal to cancel the stream.
+   * When aborted, the stream will throw a StromboliError with code 'ABORTED'.
+   *
+   * @example
+   * ```typescript
+   * const controller = new AbortController()
+   * setTimeout(() => controller.abort(), 10000)
+   *
+   * for await (const event of client.stream(
+   *   { prompt: 'Hello' },
+   *   { signal: controller.signal }
+   * )) {
+   *   // Handle events...
+   * }
+   * ```
+   */
+  signal?: AbortSignal
 }
 
 // ============================================================================
@@ -709,10 +737,9 @@ function toApiRequest(request: SimpleRunRequest): RunRequest {
 // ============================================================================
 
 /**
- * SDK version string.
- * @internal
+ * SDK version string, read from package.json.
  */
-export const SDK_VERSION = '0.1.0'
+export const SDK_VERSION: string = packageJson.version
 
 /**
  * Compatible API version range (semver).
@@ -830,6 +857,9 @@ export class StromboliClient {
   /** @internal */
   private authToken?: string
 
+  /** @internal - Stores last response metadata for interceptor */
+  private lastResponseMeta?: { url: string; headers: Headers }
+
   /**
    * Create a new Stromboli client.
    *
@@ -864,7 +894,7 @@ export class StromboliClient {
       debug: opts.debug,
     }
 
-    // Register middleware for auth injection and request ID tracking
+    // Register middleware for auth injection, request ID tracking, and response capture
     this.api.use({
       onRequest: async ({ request }) => {
         // Generate request ID for correlation
@@ -883,7 +913,17 @@ export class StromboliClient {
           authenticated: !!this.authToken,
         })
 
+        // Store URL for response interceptor
+        this.lastResponseMeta = { url: request.url, headers: new Headers() }
+
         return request
+      },
+      onResponse: async ({ response }) => {
+        // Store response headers for interceptor
+        if (this.lastResponseMeta) {
+          this.lastResponseMeta.headers = response.headers
+        }
+        return response
       },
     })
   }
@@ -930,9 +970,12 @@ export class StromboliClient {
   private getRetryDelay(attempt: number): number {
     const { retryDelay, retryBackoff } = this.options
 
-    // If retryDelay is a function, use it
+    // Default base delay for custom functions
+    const defaultBaseDelay = typeof retryDelay === 'number' ? retryDelay : 1000
+
+    // If retryDelay is a function, use it with the configured or default base delay
     if (typeof retryDelay === 'function') {
-      return retryDelay(attempt, 1000)
+      return retryDelay(attempt, defaultBaseDelay)
     }
 
     // Otherwise use built-in strategies
@@ -983,8 +1026,8 @@ export class StromboliClient {
       if (this.options.onResponse && response) {
         const interceptorResponse: InterceptorResponse = {
           status: response.status,
-          headers: new Headers(),
-          url: '',
+          headers: this.lastResponseMeta?.headers ?? new Headers(),
+          url: this.lastResponseMeta?.url ?? '',
           ok: response.status >= 200 && response.status < 300,
         }
         await this.options.onResponse(interceptorResponse)
@@ -1661,7 +1704,12 @@ export class StromboliClient {
     options: StreamOptions = {}
   ): AsyncGenerator<StreamEvent> {
     const apiRequest = 'claude' in request ? request : toApiRequest(request)
-    const { connectionTimeout = 30000, idleTimeout = 60000 } = options
+    const {
+      connectionTimeout = 30000,
+      idleTimeout = 60000,
+      maxDuration,
+      signal: externalSignal,
+    } = options
 
     // Build query params for GET /run/stream
     const params = new URLSearchParams({
@@ -1679,7 +1727,22 @@ export class StromboliClient {
     const controller = new AbortController()
     let idleTimer: ReturnType<typeof setTimeout> | undefined
     let connectionTimer: ReturnType<typeof setTimeout> | undefined
+    let maxDurationTimer: ReturnType<typeof setTimeout> | undefined
     let isConnected = false
+    let isUserAborted = false
+    let isMaxDurationExceeded = false
+
+    // Link external signal for user-initiated cancellation
+    if (externalSignal) {
+      if (externalSignal.aborted) {
+        throw StromboliError.abortedError()
+      }
+      externalSignal.addEventListener('abort', () => {
+        isUserAborted = true
+        this.log('Stream aborted by user')
+        controller.abort()
+      })
+    }
 
     // Helper to reset idle timer
     const resetIdleTimer = () => {
@@ -1697,6 +1760,15 @@ export class StromboliClient {
         controller.abort()
       }
     }, connectionTimeout)
+
+    // Max duration timeout (overall stream limit)
+    if (maxDuration !== undefined) {
+      maxDurationTimer = setTimeout(() => {
+        isMaxDurationExceeded = true
+        this.log('Stream max duration exceeded', { maxDuration })
+        controller.abort()
+      }, maxDuration)
+    }
 
     try {
       // We need to use fetch directly for SSE streaming
@@ -1772,6 +1844,19 @@ export class StromboliClient {
       }
 
       if (err instanceof DOMException && err.name === 'AbortError') {
+        // Check abort reasons in priority order
+        if (isUserAborted) {
+          throw StromboliError.abortedError()
+        }
+
+        if (isMaxDurationExceeded) {
+          this.log('Stream timeout', { type: 'MAX_DURATION', timeout: maxDuration })
+          throw new StromboliError(
+            `Stream exceeded max duration of ${maxDuration}ms`,
+            'MAX_DURATION_EXCEEDED'
+          )
+        }
+
         // Determine if it was connection timeout or idle timeout
         const timeout = isConnected ? idleTimeout : connectionTimeout
         const errorType = isConnected ? 'IDLE_TIMEOUT' : 'CONNECTION_TIMEOUT'
@@ -1788,6 +1873,7 @@ export class StromboliClient {
     } finally {
       if (idleTimer) clearTimeout(idleTimer)
       if (connectionTimer) clearTimeout(connectionTimer)
+      if (maxDurationTimer) clearTimeout(maxDurationTimer)
     }
   }
 
