@@ -2,12 +2,15 @@
 /**
  * OpenAPI Code Generation Script
  *
- * Fetches the Stromboli OpenAPI spec and generates TypeScript types + client
+ * Fetches the Stromboli Swagger spec, converts to OpenAPI 3.x,
+ * and generates TypeScript types + client
  */
 
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import openapiTS from 'openapi-typescript'
+import openapiTS, { astToString } from 'openapi-typescript'
+import converter from 'swagger2openapi'
+import { parse } from 'yaml'
 
 const GENERATED_DIR = join(import.meta.dir, '..', 'src', 'generated')
 
@@ -28,7 +31,7 @@ function getSwaggerUrl(version: string): string {
 }
 
 async function fetchSpec(url: string): Promise<string> {
-  console.log(`📥 Fetching OpenAPI spec from: ${url}`)
+  console.log(`📥 Fetching Swagger spec from: ${url}`)
 
   const response = await fetch(url)
   if (!response.ok) {
@@ -38,15 +41,32 @@ async function fetchSpec(url: string): Promise<string> {
   return response.text()
 }
 
-async function generateTypes(specContent: string): Promise<string> {
+async function convertToOpenApi3(swaggerYaml: string): Promise<object> {
+  console.log('🔄 Converting Swagger 2.x → OpenAPI 3.x...')
+
+  const swaggerSpec = parse(swaggerYaml)
+
+  return new Promise((resolve, reject) => {
+    converter.convertObj(swaggerSpec, { patch: true, warnOnly: true }, (err, options) => {
+      if (err) {
+        reject(err)
+      } else {
+        resolve(options.openapi)
+      }
+    })
+  })
+}
+
+async function generateTypes(openApiSpec: object): Promise<string> {
   console.log('🔧 Generating TypeScript types...')
 
-  const output = await openapiTS(specContent, {
+  const ast = await openapiTS(openApiSpec, {
     exportType: true,
-    pathParamsAsTypes: true,
+    pathParamsAsTypes: false, // Disable to avoid nested path conflicts
   })
 
-  return output
+  // Convert AST to string using the built-in utility
+  return astToString(ast)
 }
 
 function generateApiClient(): string {
@@ -74,15 +94,18 @@ async function main(): Promise<void> {
     const apiVersion = await getApiVersion()
     console.log(`📦 Target Stromboli API version: v${apiVersion}`)
 
-    // Fetch OpenAPI spec
+    // Fetch Swagger spec
     const swaggerUrl = getSwaggerUrl(apiVersion)
-    const specContent = await fetchSpec(swaggerUrl)
+    const swaggerYaml = await fetchSpec(swaggerUrl)
+
+    // Convert to OpenAPI 3.x
+    const openApiSpec = await convertToOpenApi3(swaggerYaml)
 
     // Ensure generated directory exists
     await mkdir(GENERATED_DIR, { recursive: true })
 
     // Generate and write types
-    const types = await generateTypes(specContent)
+    const types = await generateTypes(openApiSpec)
     const typesPath = join(GENERATED_DIR, 'types.ts')
     await writeFile(typesPath, types)
     console.log(`✅ Generated: ${typesPath}`)

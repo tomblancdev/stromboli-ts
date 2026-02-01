@@ -8,12 +8,22 @@ import { StromboliError } from './errors'
 import { type StromboliApiClient, createStromboliClient } from './generated/api'
 import type { components } from './generated/types'
 
-type ApiJob = components['schemas']['Job']
-type ApiSession = { id?: string } | string
+// Re-export key API types
+export type RunRequest = components['schemas']['internal_api.RunRequest']
+export type RunResponse = components['schemas']['internal_api.RunResponse']
+export type AsyncRunResponse = components['schemas']['internal_api.AsyncRunResponse']
+export type JobResponse = components['schemas']['internal_api.JobResponse']
+export type JobListResponse = components['schemas']['internal_api.JobListResponse']
+export type HealthResponse = components['schemas']['internal_api.HealthResponse']
+export type SessionListResponse = components['schemas']['internal_api.SessionListResponse']
+export type SessionMessagesResponse = components['schemas']['internal_api.SessionMessagesResponse']
+export type SessionDestroyResponse = components['schemas']['internal_api.SessionDestroyResponse']
+export type ClaudeOptions = components['schemas']['stromboli_internal_types.ClaudeOptions']
+export type PodmanOptions = components['schemas']['stromboli_internal_types.PodmanOptions']
+export type JobStatus = components['schemas']['stromboli_internal_job.Status']
 
 /**
- * API result type - handles the case where error types are not defined in placeholder types
- * This will be improved once proper types are generated from the OpenAPI spec
+ * API result type for handling responses
  */
 interface ApiResult<T> {
   data?: T
@@ -28,10 +38,13 @@ export interface StromboliClientOptions {
   timeout?: number
 }
 
-export interface RunRequest {
+/**
+ * Simplified run request for common use cases
+ */
+export interface SimpleRunRequest {
   prompt: string
   model?: 'sonnet' | 'opus' | 'haiku'
-  workspace?: string
+  workdir?: string
   sessionId?: string
   resume?: boolean
   timeout?: string
@@ -41,34 +54,32 @@ export interface RunRequest {
   appendSystemPrompt?: string
   allowedTools?: string[]
   disallowedTools?: string[]
+  webhookUrl?: string
 }
 
-export interface RunResponse {
-  result: string
-  sessionId: string
-}
-
-export interface AsyncRunResponse {
-  id: string
-}
-
-export interface Job {
-  id: string
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
-  result?: string
-  error?: string
-  sessionId?: string
-}
-
-export interface HealthResponse {
-  status: string
-  version: string
-  podman: boolean
-  claude: boolean
-}
-
-export interface Session {
-  id: string
+/**
+ * Convert simple request to full API request
+ */
+function toApiRequest(request: SimpleRunRequest): RunRequest {
+  return {
+    prompt: request.prompt,
+    workdir: request.workdir,
+    webhook_url: request.webhookUrl,
+    claude: {
+      model: request.model,
+      session_id: request.sessionId,
+      resume: request.resume,
+      max_budget_usd: request.maxBudgetUsd,
+      system_prompt: request.systemPrompt,
+      append_system_prompt: request.appendSystemPrompt,
+      allowed_tools: request.allowedTools,
+      disallowed_tools: request.disallowedTools,
+    },
+    podman: {
+      timeout: request.timeout,
+      memory: request.memory,
+    },
+  }
 }
 
 /**
@@ -88,104 +99,63 @@ export class StromboliClient {
   /**
    * Run a synchronous Claude session
    */
-  async run(request: RunRequest): Promise<RunResponse> {
+  async run(request: SimpleRunRequest | RunRequest): Promise<RunResponse> {
+    const apiRequest = 'claude' in request ? request : toApiRequest(request)
+
     const { data, error, response } = (await this.api.POST('/run', {
-      body: {
-        prompt: request.prompt,
-        model: request.model,
-        workspace: request.workspace,
-        session_id: request.sessionId,
-        resume: request.resume,
-        timeout: request.timeout,
-        memory: request.memory,
-        max_budget_usd: request.maxBudgetUsd,
-        system_prompt: request.systemPrompt,
-        append_system_prompt: request.appendSystemPrompt,
-        allowed_tools: request.allowedTools,
-        disallowed_tools: request.disallowedTools,
-      },
-    })) as ApiResult<components['schemas']['RunResponse']>
+      body: apiRequest,
+    })) as ApiResult<RunResponse>
 
     if (error || !data) {
       throw StromboliError.fromResponse(response.status, error)
     }
 
-    return {
-      result: data.result ?? '',
-      sessionId: data.session_id ?? '',
-    }
+    return data
   }
 
   /**
    * Start an asynchronous Claude session
    */
-  async runAsync(request: RunRequest): Promise<AsyncRunResponse> {
+  async runAsync(request: SimpleRunRequest | RunRequest): Promise<AsyncRunResponse> {
+    const apiRequest = 'claude' in request ? request : toApiRequest(request)
+
     const { data, error, response } = (await this.api.POST('/run/async', {
-      body: {
-        prompt: request.prompt,
-        model: request.model,
-        workspace: request.workspace,
-        session_id: request.sessionId,
-        resume: request.resume,
-        timeout: request.timeout,
-        memory: request.memory,
-        max_budget_usd: request.maxBudgetUsd,
-        system_prompt: request.systemPrompt,
-        append_system_prompt: request.appendSystemPrompt,
-        allowed_tools: request.allowedTools,
-        disallowed_tools: request.disallowedTools,
-      },
-    })) as ApiResult<{ id?: string }>
+      body: apiRequest,
+    })) as ApiResult<AsyncRunResponse>
 
     if (error || !data) {
       throw StromboliError.fromResponse(response.status, error)
     }
 
-    return {
-      id: data.id ?? '',
-    }
+    return data
   }
 
   /**
    * Get job status and result
    */
-  async getJob(jobId: string): Promise<Job> {
+  async getJob(jobId: string): Promise<JobResponse> {
     const { data, error, response } = (await this.api.GET('/jobs/{id}', {
       params: { path: { id: jobId } },
-    })) as ApiResult<ApiJob>
+    })) as ApiResult<JobResponse>
 
     if (error || !data) {
       throw StromboliError.fromResponse(response.status, error)
     }
 
-    return {
-      id: data.id ?? '',
-      status: (data.status as Job['status']) ?? 'pending',
-      result: data.result,
-      error: data.error,
-      sessionId: data.session_id,
-    }
+    return data
   }
 
   /**
    * List all jobs
    */
-  async listJobs(): Promise<Job[]> {
-    const { data, error, response } = (await this.api.GET('/jobs')) as ApiResult<{
-      jobs?: ApiJob[]
-    }>
+  async listJobs(): Promise<JobListResponse> {
+    const { data, error, response } = (await this.api.GET('/jobs')) as ApiResult<JobListResponse>
 
     if (error || !data) {
       throw StromboliError.fromResponse(response.status, error)
     }
 
-    return (data.jobs ?? []).map((job) => ({
-      id: job.id ?? '',
-      status: (job.status as Job['status']) ?? 'pending',
-      result: job.result,
-      error: job.error,
-      sessionId: job.session_id,
-    }))
+    return data
   }
 
   /**
@@ -205,53 +175,43 @@ export class StromboliClient {
    * Check API health status
    */
   async health(): Promise<HealthResponse> {
-    const { data, error, response } = (await this.api.GET('/health')) as ApiResult<{
-      status?: string
-      version?: string
-      podman?: boolean
-      claude?: boolean
-    }>
+    const { data, error, response } = (await this.api.GET('/health')) as ApiResult<HealthResponse>
 
     if (error || !data) {
       throw StromboliError.fromResponse(response.status, error)
     }
 
-    return {
-      status: data.status ?? 'unknown',
-      version: data.version ?? 'unknown',
-      podman: data.podman ?? false,
-      claude: data.claude ?? false,
-    }
+    return data
   }
 
   /**
    * List all sessions
    */
-  async listSessions(): Promise<Session[]> {
-    const { data, error, response } = (await this.api.GET('/sessions')) as ApiResult<{
-      sessions?: ApiSession[]
-    }>
+  async listSessions(): Promise<SessionListResponse> {
+    const { data, error, response } = (await this.api.GET(
+      '/sessions'
+    )) as ApiResult<SessionListResponse>
 
     if (error || !data) {
       throw StromboliError.fromResponse(response.status, error)
     }
 
-    return (data.sessions ?? []).map((s) => ({
-      id: typeof s === 'string' ? s : (s.id ?? ''),
-    }))
+    return data
   }
 
   /**
    * Delete a session
    */
-  async deleteSession(sessionId: string): Promise<void> {
-    const { error, response } = (await this.api.DELETE('/sessions/{id}', {
+  async deleteSession(sessionId: string): Promise<SessionDestroyResponse> {
+    const { data, error, response } = (await this.api.DELETE('/sessions/{id}', {
       params: { path: { id: sessionId } },
-    })) as ApiResult<unknown>
+    })) as ApiResult<SessionDestroyResponse>
 
-    if (error) {
+    if (error || !data) {
       throw StromboliError.fromResponse(response.status, error)
     }
+
+    return data
   }
 
   /**
@@ -260,18 +220,33 @@ export class StromboliClient {
   async getSessionMessages(
     sessionId: string,
     options?: { offset?: number; limit?: number }
-  ): Promise<unknown[]> {
+  ): Promise<SessionMessagesResponse> {
     const { data, error, response } = (await this.api.GET('/sessions/{id}/messages', {
       params: {
         path: { id: sessionId },
-        query: options ?? {},
+        query: options,
       },
-    })) as ApiResult<{ messages?: unknown[] }>
+    })) as ApiResult<SessionMessagesResponse>
 
     if (error || !data) {
       throw StromboliError.fromResponse(response.status, error)
     }
 
-    return data.messages ?? []
+    return data
+  }
+
+  /**
+   * Check Claude configuration status
+   */
+  async claudeStatus(): Promise<components['schemas']['internal_api.ClaudeStatusResponse']> {
+    const { data, error, response } = (await this.api.GET('/claude/status')) as ApiResult<
+      components['schemas']['internal_api.ClaudeStatusResponse']
+    >
+
+    if (error || !data) {
+      throw StromboliError.fromResponse(response.status, error)
+    }
+
+    return data
   }
 }

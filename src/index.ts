@@ -16,20 +16,30 @@
  * ```
  */
 
-export type {
-  AsyncRunResponse,
-  HealthResponse,
-  Job,
-  RunRequest,
-  RunResponse,
-  Session,
-  StromboliClientOptions,
-} from './client'
 // Main client
 export { StromboliClient } from './client'
 
+// Client types
+export type {
+  StromboliClientOptions,
+  SimpleRunRequest,
+  RunRequest,
+  RunResponse,
+  AsyncRunResponse,
+  JobResponse,
+  JobListResponse,
+  HealthResponse,
+  SessionListResponse,
+  SessionMessagesResponse,
+  SessionDestroyResponse,
+  ClaudeOptions,
+  PodmanOptions,
+  JobStatus,
+} from './client'
+
 // Errors
 export { StromboliError } from './errors'
-export { createStromboliClient } from './generated/api'
+
 // Re-export generated types for advanced usage
-export type { components, paths } from './generated/types'
+export type { paths, components } from './generated/types'
+export { createStromboliClient } from './generated/api'
