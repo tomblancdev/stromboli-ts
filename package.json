@@ -1,5 +1,5 @@
 {
-  "name": "stromboli-ts",
+  "name": "@tomblancdev/stromboli-ts",
   "version": "0.1.0",
   "description": "Official TypeScript SDK for Stromboli - Container orchestration for Claude Code agents",
   "type": "module",
@@ -35,6 +35,9 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/tomblancdev/stromboli-ts"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
   },
   "homepage": "https://github.com/tomblancdev/stromboli-ts#readme",
   "bugs": {
