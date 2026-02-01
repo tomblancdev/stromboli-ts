@@ -14,13 +14,15 @@
   "files": ["dist"],
   "scripts": {
     "build": "bun build ./src/index.ts --outdir ./dist --target node",
-    "test": "bun test",
+    "test": "bun test tests/unit/",
     "test:watch": "bun test --watch",
-    "test:coverage": "bun test --coverage",
+    "test:coverage": "bun test --coverage tests/unit/",
+    "test:e2e": "bun test tests/e2e/",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "generate": "bun run scripts/generate.ts",
+    "generate:mocks": "bun run scripts/generate-mocks.ts",
     "typecheck": "bunx tsc --noEmit"
   },
   "stromboli": {
@@ -43,7 +45,10 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.0",
+    "@faker-js/faker": "^9.0.0",
+    "@stoplight/prism-cli": "^5.0.0",
     "@types/bun": "^1.1.0",
+    "msw": "^2.0.0",
     "openapi-typescript": "^7.0.0",
     "swagger2openapi": "^7.0.8",
     "typescript": "^5.6.0",

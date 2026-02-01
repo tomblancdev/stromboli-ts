@@ -116,6 +116,11 @@ async function main(): Promise<void> {
     await writeFile(apiPath, apiClient)
     console.log(`✅ Generated: ${apiPath}`)
 
+    // Save OpenAPI spec for Prism mock server (E2E tests)
+    const specPath = join(GENERATED_DIR, 'openapi.json')
+    await writeFile(specPath, JSON.stringify(openApiSpec, null, 2))
+    console.log(`✅ Generated: ${specPath}`)
+
     console.log('🎉 Code generation complete!')
   } catch (error) {
     console.error('❌ Generation failed:', error)

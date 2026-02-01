@@ -44,19 +44,34 @@ typecheck: build-image
 # Testing
 .PHONY: test
 test: build-image
-	$(call run_in_container,bun test)
+	$(call run_in_container,bun run test)
 
 .PHONY: test-watch
 test-watch: build-image
-	podman run --rm -it -v $(PWD):$(WORKDIR):Z -w $(WORKDIR) $(IMAGE_NAME) /bin/bash -c "bun install && bun test --watch"
+	podman run --rm -it -v $(PWD):$(WORKDIR):Z -w $(WORKDIR) $(IMAGE_NAME) /bin/bash -c "bun install && bun test --watch tests/unit/"
 
 .PHONY: test-coverage
 test-coverage: build-image
-	$(call run_in_container,bun test --coverage)
+	$(call run_in_container,bun run test:coverage)
 
+# E2E tests with Prism mock server
 .PHONY: test-e2e
 test-e2e: build-image
-	$(call run_in_container,bun test tests/e2e/)
+	@echo "🛑 Stopping any existing Prism server..."
+	@podman stop stromboli-prism 2>/dev/null || true
+	@sleep 1
+	@echo "🚀 Starting Prism mock server..."
+	@podman run -d --name stromboli-prism --replace \
+		--network host \
+		-v $(PWD)/src/generated/openapi.json:/openapi.json:Z \
+		docker.io/stoplight/prism:4 mock -h 0.0.0.0 -p 4010 /openapi.json
+	@echo "⏳ Waiting for Prism to be ready..."
+	@sleep 5
+	@curl -s http://localhost:4010/health > /dev/null 2>&1 || sleep 3
+	@echo "🧪 Running E2E tests..."
+	-podman run --rm --network host -v $(PWD):/app:Z -w /app stromboli-ts-dev /bin/bash -c "bun install --frozen-lockfile 2>/dev/null || bun install && STROMBOLI_URL=http://localhost:4010 bun test tests/e2e/"
+	@echo "🛑 Stopping Prism server..."
+	@podman stop stromboli-prism 2>/dev/null || true
 
 # Build & Generate
 .PHONY: build
