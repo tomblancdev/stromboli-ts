@@ -31,6 +31,6 @@
   },
   "files": {
     "include": ["**/*.ts", "**/*.json"],
-    "ignore": ["node_modules", "dist", "coverage", "src/generated", "docs/.next"]
+    "ignore": ["node_modules", "dist", "coverage", "src/generated", "docs/.next", "docs/.source"]
   }
 }

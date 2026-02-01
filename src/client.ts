@@ -7,10 +7,10 @@
  * @module client
  */
 
+import packageJson from '../package.json' with { type: 'json' }
 import { StromboliError } from './errors'
 import { type StromboliApiClient, createStromboliClient } from './generated/api'
 import type { components } from './generated/types'
-import packageJson from '../package.json' with { type: 'json' }
 
 // ============================================================================
 // Type Aliases
@@ -979,9 +979,7 @@ export class StromboliClient {
     }
 
     // Otherwise use built-in strategies
-    return retryBackoff === 'exponential'
-      ? retryDelay * 2 ** (attempt - 1)
-      : retryDelay * attempt
+    return retryBackoff === 'exponential' ? retryDelay * 2 ** (attempt - 1) : retryDelay * attempt
   }
 
   /**
@@ -992,6 +990,7 @@ export class StromboliClient {
    * @param externalSignal - Optional AbortSignal from caller for cancellation
    * @param attempt - Current retry attempt (internal use)
    */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Core request method with retry/timeout/abort handling
   private async request<T>(
     fn: (signal: AbortSignal) => Promise<ApiResult<T>>,
     externalSignal?: AbortSignal,
@@ -1699,6 +1698,7 @@ export class StromboliClient {
    * @see {@link run} - For non-streaming execution
    * @see {@link StreamOptions} - Available options
    */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Streaming with multiple timeout types and SSE parsing
   async *stream(
     request: SimpleRunRequest | RunRequest,
     options: StreamOptions = {}
