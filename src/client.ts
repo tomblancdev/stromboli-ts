@@ -1,29 +1,149 @@
 /**
  * Stromboli TypeScript SDK Client
  *
- * High-level wrapper around the generated API client
+ * High-level wrapper around the generated API client for executing
+ * Claude Code in isolated Podman containers.
+ *
+ * @module client
  */
 
 import { StromboliError } from './errors'
 import { type StromboliApiClient, createStromboliClient } from './generated/api'
 import type { components } from './generated/types'
 
-// Re-export key API types
+// ============================================================================
+// Type Aliases
+// ============================================================================
+
+/**
+ * Full run request with all API options.
+ * Use {@link SimpleRunRequest} for a more user-friendly interface.
+ *
+ * @see https://github.com/tomblancdev/stromboli for API documentation
+ */
 export type RunRequest = components['schemas']['internal_api.RunRequest']
+
+/**
+ * Response from a synchronous Claude execution.
+ *
+ * @property output - Claude's response text (when successful)
+ * @property session_id - Session ID for conversation continuation
+ * @property status - Execution status: 'completed' or 'error'
+ * @property error - Error message (when failed)
+ */
 export type RunResponse = components['schemas']['internal_api.RunResponse']
+
+/**
+ * Response from starting an async Claude execution.
+ *
+ * @property job_id - Unique job identifier for tracking (e.g., 'job-abc123')
+ */
 export type AsyncRunResponse = components['schemas']['internal_api.AsyncRunResponse']
+
+/**
+ * Job status and result for async executions.
+ *
+ * @property id - Unique job identifier
+ * @property status - Current status: 'pending', 'running', 'completed', 'failed', 'crashed', 'cancelled'
+ * @property output - Claude's output (when completed)
+ * @property error - Error message (when failed)
+ * @property session_id - Associated session ID
+ * @property created_at - Job creation timestamp (ISO 8601)
+ * @property updated_at - Last update timestamp (ISO 8601)
+ */
 export type JobResponse = components['schemas']['internal_api.JobResponse']
+
+/**
+ * List of async jobs.
+ *
+ * @property jobs - Array of job responses
+ */
 export type JobListResponse = components['schemas']['internal_api.JobListResponse']
+
+/**
+ * API health check response.
+ *
+ * @property status - Overall status: 'ok' or 'error'
+ * @property version - Stromboli API version (e.g., '0.3.0')
+ * @property name - Service name ('stromboli')
+ * @property components - Individual component health statuses
+ */
 export type HealthResponse = components['schemas']['internal_api.HealthResponse']
+
+/**
+ * List of existing sessions.
+ *
+ * @property sessions - Array of session IDs (e.g., ['sess-abc123', 'sess-def456'])
+ * @property error - Error message if request failed
+ */
 export type SessionListResponse = components['schemas']['internal_api.SessionListResponse']
+
+/**
+ * Paginated list of session messages.
+ *
+ * @property messages - Array of conversation messages
+ * @property total - Total number of messages in session
+ * @property offset - Current pagination offset
+ * @property limit - Number of messages per page
+ * @property has_more - Whether more messages are available
+ */
 export type SessionMessagesResponse = components['schemas']['internal_api.SessionMessagesResponse']
+
+/**
+ * Result of session destruction.
+ *
+ * @property success - Whether the session was successfully deleted
+ * @property session_id - The deleted session ID
+ * @property error - Error message if deletion failed
+ */
 export type SessionDestroyResponse = components['schemas']['internal_api.SessionDestroyResponse']
+
+/**
+ * All available Claude CLI options for container execution.
+ * These map directly to Claude Code CLI flags.
+ *
+ * @see https://docs.anthropic.com/claude-code for CLI documentation
+ */
 export type ClaudeOptions = components['schemas']['stromboli_internal_types.ClaudeOptions']
+
+/**
+ * Podman container configuration options.
+ *
+ * @property timeout - Container timeout (e.g., '5m', '1h', '30s')
+ * @property memory - Memory limit (e.g., '512m', '1g')
+ * @property cpus - CPU limit (e.g., '0.5', '2')
+ * @property image - Custom container image (must match allowed patterns)
+ * @property volumes - Volume mounts (e.g., ['/data:/data:ro'])
+ */
 export type PodmanOptions = components['schemas']['stromboli_internal_types.PodmanOptions']
+
+/**
+ * Job execution status.
+ *
+ * - `pending` - Job is queued, waiting to start
+ * - `running` - Job is currently executing
+ * - `completed` - Job finished successfully
+ * - `failed` - Job failed with an error
+ * - `crashed` - Container crashed unexpectedly
+ * - `cancelled` - Job was cancelled by user
+ */
 export type JobStatus = components['schemas']['stromboli_internal_job.Status']
 
 /**
- * API result type for handling responses
+ * Claude configuration status response.
+ *
+ * @property configured - Whether Claude credentials are set up
+ * @property message - Human-readable status message
+ */
+export type ClaudeStatusResponse = components['schemas']['internal_api.ClaudeStatusResponse']
+
+// ============================================================================
+// Internal Types
+// ============================================================================
+
+/**
+ * API result type for handling openapi-fetch responses.
+ * @internal
  */
 interface ApiResult<T> {
   data?: T
@@ -31,34 +151,171 @@ interface ApiResult<T> {
   response: { status: number }
 }
 
+// ============================================================================
+// Client Options
+// ============================================================================
+
+/**
+ * Configuration options for the Stromboli client.
+ *
+ * @example
+ * ```typescript
+ * const client = new StromboliClient({
+ *   baseUrl: 'http://localhost:8585',
+ *   timeout: 60000, // 1 minute
+ * })
+ * ```
+ */
 export interface StromboliClientOptions {
-  /** Base URL of the Stromboli API (e.g., 'http://localhost:8585') */
+  /**
+   * Base URL of the Stromboli API.
+   * @example 'http://localhost:8585'
+   */
   baseUrl: string
-  /** Request timeout in milliseconds (default: 30000) */
+
+  /**
+   * Request timeout in milliseconds.
+   * @default 30000
+   */
   timeout?: number
 }
 
+// ============================================================================
+// Simple Run Request
+// ============================================================================
+
 /**
- * Simplified run request for common use cases
+ * Simplified run request for common use cases.
+ *
+ * This interface provides a flattened, user-friendly way to configure
+ * Claude executions. For advanced options, use {@link RunRequest} directly.
+ *
+ * @example
+ * ```typescript
+ * // Basic usage
+ * const result = await client.run({
+ *   prompt: 'Analyze this code and suggest improvements',
+ *   model: 'sonnet',
+ * })
+ *
+ * // With container options
+ * const result = await client.run({
+ *   prompt: 'Run the test suite',
+ *   model: 'haiku',
+ *   workdir: '/workspace',
+ *   timeout: '10m',
+ *   memory: '1g',
+ *   allowedTools: ['Bash', 'Read'],
+ * })
+ *
+ * // Continue a conversation
+ * const followUp = await client.run({
+ *   prompt: 'Now fix the failing tests',
+ *   sessionId: result.session_id,
+ *   resume: true,
+ * })
+ * ```
  */
 export interface SimpleRunRequest {
+  /**
+   * The prompt to send to Claude.
+   * This is the only required field.
+   * @example 'Analyze this code and suggest improvements'
+   */
   prompt: string
+
+  /**
+   * Model to use for the request.
+   * - `sonnet` - Balanced performance and cost (recommended)
+   * - `opus` - Most capable, highest cost
+   * - `haiku` - Fastest, lowest cost
+   * @default 'sonnet' (server default)
+   */
   model?: 'sonnet' | 'opus' | 'haiku'
+
+  /**
+   * Working directory inside the container where Claude will execute.
+   * Use with Podman volume mounts to give Claude access to your code.
+   * @example '/workspace'
+   */
   workdir?: string
+
+  /**
+   * Session ID for conversation continuation.
+   * Use with `resume: true` to continue a previous conversation.
+   * @example 'sess-abc123def456'
+   */
   sessionId?: string
+
+  /**
+   * Resume an existing session.
+   * Requires `sessionId` to be set.
+   * @default false
+   */
   resume?: boolean
+
+  /**
+   * Container execution timeout.
+   * Supports Go duration format: '30s', '5m', '1h'.
+   * @example '5m'
+   */
   timeout?: string
+
+  /**
+   * Container memory limit.
+   * Supports Docker memory format: '512m', '1g', '2g'.
+   * @example '512m'
+   */
   memory?: string
+
+  /**
+   * Maximum dollar amount for API calls.
+   * Claude will stop when this budget is reached.
+   * @example 1.0
+   */
   maxBudgetUsd?: number
+
+  /**
+   * Replace the default system prompt entirely.
+   * @example 'You are a senior Go developer specializing in APIs.'
+   */
   systemPrompt?: string
+
+  /**
+   * Append to the default system prompt.
+   * Use this to add context without replacing the defaults.
+   * @example 'Focus on security best practices.'
+   */
   appendSystemPrompt?: string
+
+  /**
+   * Allowed tools with optional patterns.
+   * Use patterns like 'Bash(git:*)' to restrict commands.
+   * @example ['Bash(git:*)', 'Read', 'Edit']
+   */
   allowedTools?: string[]
+
+  /**
+   * Tools to deny.
+   * @example ['Write', 'Bash(rm:*)']
+   */
   disallowedTools?: string[]
+
+  /**
+   * Webhook URL to notify when async job completes.
+   * Only used with {@link StromboliClient.runAsync}.
+   * @example 'https://my-app.com/webhooks/stromboli'
+   */
   webhookUrl?: string
 }
 
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
 /**
- * Convert simple request to full API request
+ * Convert a SimpleRunRequest to the full API RunRequest format.
+ * @internal
  */
 function toApiRequest(request: SimpleRunRequest): RunRequest {
   return {
@@ -82,14 +339,78 @@ function toApiRequest(request: SimpleRunRequest): RunRequest {
   }
 }
 
+// ============================================================================
+// Stromboli Client
+// ============================================================================
+
 /**
- * Main Stromboli client class
+ * Main client for interacting with the Stromboli API.
+ *
+ * Stromboli orchestrates Claude Code execution in isolated Podman containers,
+ * providing a secure and scalable way to run AI-powered coding tasks.
+ *
+ * @example
+ * ```typescript
+ * import { StromboliClient } from 'stromboli-ts'
+ *
+ * // Create client with URL string
+ * const client = new StromboliClient('http://localhost:8585')
+ *
+ * // Or with options object
+ * const client = new StromboliClient({
+ *   baseUrl: 'http://localhost:8585',
+ *   timeout: 60000,
+ * })
+ *
+ * // Check API health
+ * const health = await client.health()
+ * console.log(`Stromboli ${health.version} is ${health.status}`)
+ *
+ * // Run Claude synchronously
+ * const result = await client.run({
+ *   prompt: 'What files are in this directory?',
+ *   model: 'haiku',
+ * })
+ * console.log(result.output)
+ *
+ * // Run Claude asynchronously (for long tasks)
+ * const job = await client.runAsync({
+ *   prompt: 'Refactor the entire codebase',
+ *   webhookUrl: 'https://my-app.com/webhook',
+ * })
+ *
+ * // Check job status
+ * const status = await client.getJob(job.job_id!)
+ * console.log(`Job ${status.id} is ${status.status}`)
+ * ```
  */
 export class StromboliClient {
+  /** @internal */
   private readonly api: StromboliApiClient
-  /** Request timeout in milliseconds */
+
+  /**
+   * Request timeout in milliseconds.
+   * @readonly
+   */
   readonly timeout: number
 
+  /**
+   * Create a new Stromboli client.
+   *
+   * @param options - Base URL string or configuration options
+   *
+   * @example
+   * ```typescript
+   * // Simple: just the URL
+   * const client = new StromboliClient('http://localhost:8585')
+   *
+   * // Advanced: with options
+   * const client = new StromboliClient({
+   *   baseUrl: 'http://localhost:8585',
+   *   timeout: 60000,
+   * })
+   * ```
+   */
   constructor(options: StromboliClientOptions | string) {
     const opts = typeof options === 'string' ? { baseUrl: options } : options
     this.api = createStromboliClient(opts.baseUrl)
@@ -97,7 +418,42 @@ export class StromboliClient {
   }
 
   /**
-   * Run a synchronous Claude session
+   * Run a synchronous Claude session in an isolated container.
+   *
+   * This method blocks until Claude completes the task. For long-running
+   * tasks, consider using {@link runAsync} instead.
+   *
+   * @param request - Run configuration (simple or full format)
+   * @returns Claude's response with output and session ID
+   * @throws {StromboliError} When the API returns an error
+   *
+   * @example
+   * ```typescript
+   * // Simple usage
+   * const result = await client.run({
+   *   prompt: 'Hello, Claude!',
+   *   model: 'haiku',
+   * })
+   * console.log(result.output)
+   *
+   * // With workspace and tools
+   * const result = await client.run({
+   *   prompt: 'Run the tests and fix any failures',
+   *   workdir: '/workspace',
+   *   allowedTools: ['Bash', 'Read', 'Edit'],
+   *   timeout: '10m',
+   * })
+   *
+   * // Continue conversation
+   * const followUp = await client.run({
+   *   prompt: 'Now add more test coverage',
+   *   sessionId: result.session_id,
+   *   resume: true,
+   * })
+   * ```
+   *
+   * @see {@link runAsync} - For long-running tasks
+   * @see {@link SimpleRunRequest} - Available options
    */
   async run(request: SimpleRunRequest | RunRequest): Promise<RunResponse> {
     const apiRequest = 'claude' in request ? request : toApiRequest(request)
@@ -114,7 +470,42 @@ export class StromboliClient {
   }
 
   /**
-   * Start an asynchronous Claude session
+   * Start an asynchronous Claude session.
+   *
+   * Returns immediately with a job ID. Use {@link getJob} to poll for
+   * results, or provide a `webhookUrl` to be notified when complete.
+   *
+   * @param request - Run configuration (simple or full format)
+   * @returns Job ID for tracking the execution
+   * @throws {StromboliError} When the API returns an error
+   *
+   * @example
+   * ```typescript
+   * // Start async job
+   * const job = await client.runAsync({
+   *   prompt: 'Perform a comprehensive code review',
+   *   model: 'opus',
+   * })
+   * console.log(`Started job: ${job.job_id}`)
+   *
+   * // Poll for completion
+   * let status = await client.getJob(job.job_id!)
+   * while (status.status === 'pending' || status.status === 'running') {
+   *   await new Promise(r => setTimeout(r, 5000)) // Wait 5s
+   *   status = await client.getJob(job.job_id!)
+   * }
+   * console.log(status.output)
+   *
+   * // Or use webhook
+   * const job = await client.runAsync({
+   *   prompt: 'Long running task...',
+   *   webhookUrl: 'https://my-app.com/webhook',
+   * })
+   * ```
+   *
+   * @see {@link run} - For quick, synchronous tasks
+   * @see {@link getJob} - To check job status
+   * @see {@link cancelJob} - To cancel a running job
    */
   async runAsync(request: SimpleRunRequest | RunRequest): Promise<AsyncRunResponse> {
     const apiRequest = 'claude' in request ? request : toApiRequest(request)
@@ -131,7 +522,31 @@ export class StromboliClient {
   }
 
   /**
-   * Get job status and result
+   * Get the status and result of an async job.
+   *
+   * @param jobId - The job ID returned by {@link runAsync}
+   * @returns Current job status and output (if completed)
+   * @throws {StromboliError} When the job is not found or API error
+   *
+   * @example
+   * ```typescript
+   * const status = await client.getJob('job-abc123')
+   *
+   * switch (status.status) {
+   *   case 'completed':
+   *     console.log('Output:', status.output)
+   *     break
+   *   case 'failed':
+   *     console.error('Error:', status.error)
+   *     break
+   *   case 'running':
+   *     console.log('Still running...')
+   *     break
+   * }
+   * ```
+   *
+   * @see {@link runAsync} - To start an async job
+   * @see {@link listJobs} - To list all jobs
    */
   async getJob(jobId: string): Promise<JobResponse> {
     const { data, error, response } = (await this.api.GET('/jobs/{id}', {
@@ -146,7 +561,25 @@ export class StromboliClient {
   }
 
   /**
-   * List all jobs
+   * List all async jobs.
+   *
+   * @returns List of all jobs with their current status
+   * @throws {StromboliError} When the API returns an error
+   *
+   * @example
+   * ```typescript
+   * const { jobs } = await client.listJobs()
+   *
+   * for (const job of jobs ?? []) {
+   *   console.log(`${job.id}: ${job.status}`)
+   * }
+   *
+   * // Filter running jobs
+   * const running = jobs?.filter(j => j.status === 'running')
+   * ```
+   *
+   * @see {@link getJob} - To get a specific job
+   * @see {@link cancelJob} - To cancel a job
    */
   async listJobs(): Promise<JobListResponse> {
     const { data, error, response } = (await this.api.GET('/jobs')) as ApiResult<JobListResponse>
@@ -159,7 +592,19 @@ export class StromboliClient {
   }
 
   /**
-   * Cancel a running job
+   * Cancel a running or pending job.
+   *
+   * @param jobId - The job ID to cancel
+   * @throws {StromboliError} When the job is not found or cannot be cancelled
+   *
+   * @example
+   * ```typescript
+   * await client.cancelJob('job-abc123')
+   * console.log('Job cancelled')
+   * ```
+   *
+   * @see {@link runAsync} - To start an async job
+   * @see {@link getJob} - To check job status
    */
   async cancelJob(jobId: string): Promise<void> {
     const { error, response } = (await this.api.DELETE('/jobs/{id}', {
@@ -172,7 +617,27 @@ export class StromboliClient {
   }
 
   /**
-   * Check API health status
+   * Check the API health status.
+   *
+   * Use this to verify the Stromboli server is running and all
+   * components (Podman, Claude) are properly configured.
+   *
+   * @returns Health status with version and component details
+   * @throws {StromboliError} When the API is unreachable
+   *
+   * @example
+   * ```typescript
+   * const health = await client.health()
+   *
+   * console.log(`Stromboli v${health.version}`)
+   * console.log(`Status: ${health.status}`)
+   *
+   * for (const component of health.components ?? []) {
+   *   console.log(`  ${component.name}: ${component.status}`)
+   * }
+   * ```
+   *
+   * @see {@link claudeStatus} - To check Claude configuration specifically
    */
   async health(): Promise<HealthResponse> {
     const { data, error, response } = (await this.api.GET('/health')) as ApiResult<HealthResponse>
@@ -185,7 +650,25 @@ export class StromboliClient {
   }
 
   /**
-   * List all sessions
+   * List all existing sessions.
+   *
+   * Sessions store conversation history and can be resumed with
+   * the `resume: true` option in {@link run} or {@link runAsync}.
+   *
+   * @returns List of session IDs
+   * @throws {StromboliError} When the API returns an error
+   *
+   * @example
+   * ```typescript
+   * const { sessions } = await client.listSessions()
+   *
+   * for (const sessionId of sessions ?? []) {
+   *   console.log(`Session: ${sessionId}`)
+   * }
+   * ```
+   *
+   * @see {@link deleteSession} - To delete a session
+   * @see {@link getSessionMessages} - To view session history
    */
   async listSessions(): Promise<SessionListResponse> {
     const { data, error, response } = (await this.api.GET(
@@ -200,7 +683,22 @@ export class StromboliClient {
   }
 
   /**
-   * Delete a session
+   * Delete a session and its conversation history.
+   *
+   * @param sessionId - The session ID to delete
+   * @returns Confirmation of deletion
+   * @throws {StromboliError} When the session is not found or API error
+   *
+   * @example
+   * ```typescript
+   * const result = await client.deleteSession('sess-abc123')
+   *
+   * if (result.success) {
+   *   console.log(`Deleted session: ${result.session_id}`)
+   * }
+   * ```
+   *
+   * @see {@link listSessions} - To list all sessions
    */
   async deleteSession(sessionId: string): Promise<SessionDestroyResponse> {
     const { data, error, response } = (await this.api.DELETE('/sessions/{id}', {
@@ -215,7 +713,36 @@ export class StromboliClient {
   }
 
   /**
-   * Get session messages
+   * Get paginated messages from a session's conversation history.
+   *
+   * @param sessionId - The session ID to fetch messages from
+   * @param options - Pagination options
+   * @param options.offset - Number of messages to skip (default: 0)
+   * @param options.limit - Maximum messages to return (default: 50)
+   * @returns Paginated list of conversation messages
+   * @throws {StromboliError} When the session is not found or API error
+   *
+   * @example
+   * ```typescript
+   * // Get first page
+   * const page1 = await client.getSessionMessages('sess-abc123', {
+   *   limit: 10,
+   * })
+   *
+   * for (const msg of page1.messages ?? []) {
+   *   console.log(`[${msg.type}] ${msg.content}`)
+   * }
+   *
+   * // Get next page if available
+   * if (page1.has_more) {
+   *   const page2 = await client.getSessionMessages('sess-abc123', {
+   *     offset: 10,
+   *     limit: 10,
+   *   })
+   * }
+   * ```
+   *
+   * @see {@link listSessions} - To list all sessions
    */
   async getSessionMessages(
     sessionId: string,
@@ -236,12 +763,31 @@ export class StromboliClient {
   }
 
   /**
-   * Check Claude configuration status
+   * Check Claude configuration status.
+   *
+   * Verifies that Claude credentials are properly configured
+   * in the Stromboli server.
+   *
+   * @returns Configuration status with message
+   * @throws {StromboliError} When the API returns an error
+   *
+   * @example
+   * ```typescript
+   * const status = await client.claudeStatus()
+   *
+   * if (status.configured) {
+   *   console.log('Claude is ready!')
+   * } else {
+   *   console.error('Claude not configured:', status.message)
+   * }
+   * ```
+   *
+   * @see {@link health} - For overall API health
    */
-  async claudeStatus(): Promise<components['schemas']['internal_api.ClaudeStatusResponse']> {
-    const { data, error, response } = (await this.api.GET('/claude/status')) as ApiResult<
-      components['schemas']['internal_api.ClaudeStatusResponse']
-    >
+  async claudeStatus(): Promise<ClaudeStatusResponse> {
+    const { data, error, response } = (await this.api.GET(
+      '/claude/status'
+    )) as ApiResult<ClaudeStatusResponse>
 
     if (error || !data) {
       throw StromboliError.fromResponse(response.status, error)
