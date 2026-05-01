@@ -165,6 +165,165 @@ export type TokenResponse = components['schemas']['internal_api.TokenResponse']
  */
 export type ValidateResponse = components['schemas']['internal_api.ValidateResponse']
 
+// ----------------------------------------------------------------------------
+// Persistent Agents (added in stromboli v0.5.x)
+// ----------------------------------------------------------------------------
+
+/**
+ * Configuration for spawning a long-lived Claude agent.
+ *
+ * Persistent agents are containers that stay alive between turns, letting you
+ * stream a multi-turn conversation through a single Claude process.
+ */
+export type SpawnAgentRequest = components['schemas']['stromboli_internal_agent.CreateRequest']
+
+/**
+ * Snapshot of a persistent agent's current state.
+ *
+ * @property id - Agent ID
+ * @property session_id - Underlying session ID
+ * @property status - Current lifecycle status
+ * @property turns_completed - Number of turns processed since spawn
+ * @property idle_timeout_seconds - Effective idle timeout
+ * @property idle_timeout_disabled - True if the idle watchdog is off
+ * @property created_at - Spawn timestamp (ISO 8601)
+ * @property last_activity_at - Last input/output timestamp (ISO 8601)
+ * @property exit_error - Error message if the agent crashed
+ */
+export type AgentSnapshot = components['schemas']['stromboli_internal_agent.Snapshot']
+
+/**
+ * Persistent agent lifecycle status.
+ */
+export type AgentStatus = components['schemas']['stromboli_internal_agent.Status']
+
+/**
+ * Response after spawning a persistent agent.
+ * Same shape as {@link AgentSnapshot}.
+ */
+export type SpawnAgentResponse = components['schemas']['internal_api.CreateAgentResponse']
+
+/**
+ * Request to append a turn to a running agent's stream-json stdin.
+ *
+ * @property prompt - The next user turn (required)
+ */
+export type SendAgentRequest = components['schemas']['internal_api.SendAgentRequest']
+
+/**
+ * Acknowledgement that a turn has started.
+ * Output for the turn streams via {@link StromboliClient.streamAgent}.
+ *
+ * @property turn_id - Unique turn identifier
+ */
+export type SendAgentResponse = components['schemas']['internal_api.SendAgentResponse']
+
+// ----------------------------------------------------------------------------
+// Container Images (added in stromboli v0.5.x)
+// ----------------------------------------------------------------------------
+
+/**
+ * Container image metadata with compatibility information.
+ *
+ * @property repository - Image repository (e.g., 'python')
+ * @property tag - Image tag (e.g., '3.12-slim')
+ * @property id - Image SHA
+ * @property size - Image size in bytes
+ * @property created - Creation timestamp (ISO 8601)
+ * @property compatible - Whether the image is compatible with Stromboli
+ * @property compatibility_rank - 0-N rank (higher is better)
+ * @property has_claude_cli - Whether the image already bundles Claude CLI
+ * @property tools - Detected tools available in the image
+ * @property description - Human-readable description
+ */
+export type ImageInfo = components['schemas']['internal_api.ImageInfoResponse']
+
+/**
+ * Detailed image info, including container labels.
+ * Returned by {@link StromboliClient.inspectImage}.
+ */
+export type ImageDetail = components['schemas']['internal_api.ImageDetailResponse']
+
+/**
+ * List of local container images sorted by compatibility rank.
+ *
+ * @property images - Image metadata entries
+ */
+export type ImagesListResponse = components['schemas']['internal_api.ImagesListResponse']
+
+/**
+ * Request to pull a container image from a registry.
+ *
+ * @property image - Fully-qualified image reference (required)
+ * @property platform - Target platform (e.g., 'linux/amd64')
+ * @property quiet - Suppress progress output
+ */
+export type ImagePullRequest = components['schemas']['internal_api.ImagePullRequest']
+
+/**
+ * Result of an image pull operation.
+ *
+ * @property success - Whether the pull succeeded
+ * @property image - The pulled image reference
+ * @property image_id - Resolved image SHA (when successful)
+ */
+export type ImagePullResponse = components['schemas']['internal_api.ImagePullResponse']
+
+/**
+ * Search results from container registries.
+ *
+ * @property results - Search result entries
+ */
+export type ImageSearchResponse = components['schemas']['internal_api.ImageSearchResponse']
+
+// ----------------------------------------------------------------------------
+// Secrets CRUD (added in stromboli v0.5.x)
+// ----------------------------------------------------------------------------
+
+/**
+ * Request to create a new Podman secret.
+ *
+ * @property name - Secret name (required)
+ * @property value - Secret value (required, never returned by the API afterwards)
+ */
+export type CreateSecretRequest = components['schemas']['internal_api.CreateSecretRequest']
+
+/**
+ * Result of secret creation.
+ *
+ * @property success - Whether creation succeeded
+ * @property name - Secret name (echoed)
+ * @property error - Error message on failure
+ */
+export type CreateSecretResponse = components['schemas']['internal_api.CreateSecretResponse']
+
+/**
+ * Secret metadata. Never contains the actual secret value.
+ *
+ * @property id - Internal secret ID
+ * @property name - Secret name
+ * @property created_at - Creation timestamp (ISO 8601)
+ */
+export type SecretInfo = components['schemas']['internal_api.SecretInfoResponse']
+
+/**
+ * Result of secret deletion.
+ *
+ * @property success - Whether deletion succeeded
+ * @property name - Secret name (echoed)
+ * @property error - Error message on failure
+ */
+export type DeleteSecretResponse = components['schemas']['internal_api.DeleteSecretResponse']
+
+// ----------------------------------------------------------------------------
+// Single Session Message (added in stromboli v0.5.x)
+// ----------------------------------------------------------------------------
+
+/**
+ * Single session message, returned by {@link StromboliClient.getSessionMessage}.
+ */
+export type SessionMessageResponse = components['schemas']['internal_api.SessionMessageResponse']
+
 // ============================================================================
 // Internal Types
 // ============================================================================
@@ -620,6 +779,58 @@ export type StreamEvent =
   | StreamToolResultEvent
   | StreamErrorEvent
   | StreamDoneEvent
+
+// ----------------------------------------------------------------------------
+// Persistent Agent Stream Events
+// ----------------------------------------------------------------------------
+
+/**
+ * Typed SSE event emitted by {@link StromboliClient.streamAgent}.
+ *
+ * Stromboli emits each event with an SSE `event:` name (e.g.
+ * `agent.output`, `agent.error`, `agent.done`) and a JSON `data:` payload.
+ * The shape of `data` is opaque to the SDK — consult the stromboli docs
+ * for the schema of each event name.
+ */
+export interface AgentStreamMessageEvent {
+  type: 'message'
+  /** SSE event name, e.g. `agent.output`. Defaults to `'message'` when the server omits it. */
+  event: string
+  /** Parsed JSON payload, or the raw string if the payload was not valid JSON. */
+  data: unknown
+}
+
+/**
+ * Stream-level error event from {@link StromboliClient.streamAgent}.
+ */
+export interface AgentStreamErrorEvent {
+  type: 'error'
+  error: string
+}
+
+/**
+ * Terminal event indicating the agent stream has closed.
+ */
+export interface AgentStreamDoneEvent {
+  type: 'done'
+}
+
+/**
+ * Discriminated union of agent stream events.
+ *
+ * @example
+ * ```typescript
+ * for await (const event of client.streamAgent('agent-abc')) {
+ *   if (event.type === 'message') {
+ *     console.log(event.event, event.data)
+ *   }
+ * }
+ * ```
+ */
+export type AgentStreamEvent =
+  | AgentStreamMessageEvent
+  | AgentStreamErrorEvent
+  | AgentStreamDoneEvent
 
 /**
  * Options for streaming execution.
@@ -1417,6 +1628,41 @@ export class StromboliClient {
   }
 
   /**
+   * Fetch a single message from a session by message ID.
+   *
+   * Use this when you have a specific message UUID from
+   * {@link getSessionMessages} and want the full record.
+   *
+   * @param sessionId - The session ID
+   * @param messageId - The message UUID
+   * @returns The matching session message
+   * @throws {StromboliError} When the session or message is not found
+   *
+   * @example
+   * ```typescript
+   * const page = await client.getSessionMessages('sess-abc123', { limit: 10 })
+   * const first = page.messages?.[0]
+   * if (first?.uuid) {
+   *   const msg = await client.getSessionMessage('sess-abc123', first.uuid)
+   *   console.log(msg)
+   * }
+   * ```
+   *
+   * @see {@link getSessionMessages} - To list session messages
+   */
+  async getSessionMessage(sessionId: string, messageId: string): Promise<SessionMessageResponse> {
+    return this.request(
+      (signal) =>
+        this.api.GET('/sessions/{id}/messages/{message_id}', {
+          params: {
+            path: { id: sessionId, message_id: messageId },
+          },
+          signal,
+        }) as Promise<ApiResult<SessionMessageResponse>>
+    )
+  }
+
+  /**
    * Check Claude configuration status.
    *
    * Verifies that Claude credentials are properly configured
@@ -1478,6 +1724,96 @@ export class StromboliClient {
   async listSecrets(): Promise<SecretsListResponse> {
     return this.request(
       (signal) => this.api.GET('/secrets', { signal }) as Promise<ApiResult<SecretsListResponse>>
+    )
+  }
+
+  /**
+   * Create a new Podman secret.
+   *
+   * The secret value is write-once — the API never returns it back. Read
+   * operations only expose metadata via {@link getSecret}.
+   *
+   * @param request - Secret name and value
+   * @returns Result of creation (success flag, name)
+   * @throws {StromboliError} When the API returns an error or the secret already exists
+   *
+   * @example
+   * ```typescript
+   * const result = await client.createSecret({
+   *   name: 'github-token',
+   *   value: process.env.GH_TOKEN!,
+   * })
+   *
+   * if (!result.success) {
+   *   console.error('Failed:', result.error)
+   * }
+   * ```
+   *
+   * @see {@link listSecrets} - To list all secrets
+   * @see {@link deleteSecret} - To remove a secret
+   */
+  async createSecret(request: CreateSecretRequest): Promise<CreateSecretResponse> {
+    return this.request(
+      (signal) =>
+        this.api.POST('/secrets', {
+          body: request,
+          signal,
+        }) as Promise<ApiResult<CreateSecretResponse>>
+    )
+  }
+
+  /**
+   * Get metadata for a single secret.
+   *
+   * The actual secret value is never returned — only id, name, and
+   * timestamps.
+   *
+   * @param name - Secret name
+   * @returns Secret metadata
+   * @throws {StromboliError} When the secret is not found
+   *
+   * @example
+   * ```typescript
+   * const meta = await client.getSecret('github-token')
+   * console.log(`Created: ${meta.created_at}`)
+   * ```
+   *
+   * @see {@link listSecrets} - To enumerate secrets
+   */
+  async getSecret(name: string): Promise<SecretInfo> {
+    return this.request(
+      (signal) =>
+        this.api.GET('/secrets/{name}', {
+          params: { path: { name } },
+          signal,
+        }) as Promise<ApiResult<SecretInfo>>
+    )
+  }
+
+  /**
+   * Delete a Podman secret by name.
+   *
+   * @param name - Secret name to delete
+   * @returns Result of deletion (success flag, name)
+   * @throws {StromboliError} When the secret is not found or in use
+   *
+   * @example
+   * ```typescript
+   * const result = await client.deleteSecret('github-token')
+   * if (result.success) {
+   *   console.log('Secret deleted')
+   * }
+   * ```
+   *
+   * @see {@link createSecret} - To create a secret
+   */
+  async deleteSecret(name: string): Promise<DeleteSecretResponse> {
+    return this.request(
+      (signal) =>
+        this.api.DELETE('/secrets/{name}', {
+          params: { path: { name } },
+          signal,
+        }) as Promise<ApiResult<DeleteSecretResponse>>
     )
   }
 
@@ -1947,5 +2283,481 @@ export class StromboliClient {
       // Wait before next poll
       await new Promise((r) => setTimeout(r, pollInterval))
     }
+  }
+
+  // ==========================================================================
+  // Persistent Agents
+  // ==========================================================================
+
+  /**
+   * List all persistent agents.
+   *
+   * Persistent agents are long-lived Claude containers that survive between
+   * turns, letting you stream a multi-turn conversation through a single
+   * Claude process. Use {@link spawnAgent} to start one.
+   *
+   * @returns Array of agent snapshots
+   * @throws {StromboliError} When the API returns an error
+   *
+   * @example
+   * ```typescript
+   * const agents = await client.listAgents()
+   * for (const agent of agents) {
+   *   console.log(`${agent.id}: ${agent.status} (${agent.turns_completed} turns)`)
+   * }
+   * ```
+   *
+   * @see {@link spawnAgent} - To create a new agent
+   */
+  async listAgents(): Promise<AgentSnapshot[]> {
+    return this.request(
+      (signal) => this.api.GET('/agents', { signal }) as Promise<ApiResult<AgentSnapshot[]>>
+    )
+  }
+
+  /**
+   * Spawn a new persistent agent.
+   *
+   * Launches a long-lived Claude container with stream-json I/O. The agent
+   * stays running until you call {@link stopAgent}, the idle watchdog fires,
+   * or the server shuts down.
+   *
+   * @param request - Agent configuration
+   * @returns Spawned agent metadata (id, session_id, status, etc.)
+   * @throws {StromboliError} When the request is invalid or spawn fails
+   *
+   * @example
+   * ```typescript
+   * const agent = await client.spawnAgent({
+   *   prompt: 'You are an on-call assistant.',
+   *   workdir: '/workspace',
+   *   idle_timeout_seconds: 1800,
+   * })
+   * console.log(`Spawned agent ${agent.id}`)
+   * ```
+   *
+   * @see {@link sendToAgent} - To send a turn
+   * @see {@link streamAgent} - To consume agent output
+   * @see {@link stopAgent} - To shut down the agent
+   */
+  async spawnAgent(request: SpawnAgentRequest): Promise<SpawnAgentResponse> {
+    return this.request(
+      (signal) =>
+        this.api.POST('/agents', {
+          body: request,
+          signal,
+        }) as Promise<ApiResult<SpawnAgentResponse>>
+    )
+  }
+
+  /**
+   * Get the current snapshot of a persistent agent.
+   *
+   * @param agentId - The agent ID
+   * @returns Current agent snapshot
+   * @throws {StromboliError} When the agent is not found
+   *
+   * @example
+   * ```typescript
+   * const agent = await client.getAgent('agent-abc123')
+   * if (agent.status === 'running') {
+   *   console.log(`${agent.turns_completed} turns processed`)
+   * }
+   * ```
+   */
+  async getAgent(agentId: string): Promise<AgentSnapshot> {
+    return this.request(
+      (signal) =>
+        this.api.GET('/agents/{id}', {
+          params: { path: { id: agentId } },
+          signal,
+        }) as Promise<ApiResult<AgentSnapshot>>
+    )
+  }
+
+  /**
+   * Stop a persistent agent.
+   *
+   * Sends a graceful shutdown to the underlying Claude container.
+   * The agent's session history is preserved.
+   *
+   * @param agentId - The agent ID to stop
+   * @throws {StromboliError} When the agent is not found
+   *
+   * @example
+   * ```typescript
+   * await client.stopAgent('agent-abc123')
+   * ```
+   *
+   * @see {@link spawnAgent} - To start an agent
+   */
+  async stopAgent(agentId: string): Promise<void> {
+    await this.request(
+      (signal) =>
+        this.api.DELETE('/agents/{id}', {
+          params: { path: { id: agentId } },
+          signal,
+        }) as Promise<ApiResult<unknown>>
+    )
+  }
+
+  /**
+   * Send a turn to a running persistent agent.
+   *
+   * Appends a prompt to the agent's stream-json stdin. The output for this
+   * turn is delivered via {@link streamAgent}, not in the response body —
+   * this method only returns an acknowledgement with a `turn_id` once the
+   * server has accepted the input.
+   *
+   * @param agentId - The agent ID
+   * @param request - Turn payload (prompt is required)
+   * @returns Acknowledgement with the turn ID
+   * @throws {StromboliError} When the agent is not found or not accepting input
+   *
+   * @example
+   * ```typescript
+   * const ack = await client.sendToAgent('agent-abc123', {
+   *   prompt: 'What\'s the latest alert?',
+   * })
+   * console.log(`Turn started: ${ack.turn_id}`)
+   *
+   * // Consume output via streamAgent in a separate task
+   * ```
+   *
+   * @see {@link streamAgent} - To read agent output
+   */
+  async sendToAgent(agentId: string, request: SendAgentRequest): Promise<SendAgentResponse> {
+    return this.request(
+      (signal) =>
+        this.api.POST('/agents/{id}/send', {
+          params: { path: { id: agentId } },
+          body: request,
+          signal,
+        }) as Promise<ApiResult<SendAgentResponse>>
+    )
+  }
+
+  /**
+   * Stream events from a persistent agent (SSE).
+   *
+   * Yields each `agent.*` event the server emits — typically one per turn
+   * boundary plus incremental output events. The connection stays open until
+   * the agent stops, the caller aborts, or an idle timeout fires.
+   *
+   * @param agentId - The agent ID to stream from
+   * @param options - Streaming options (timeouts, abort signal)
+   * @yields Agent stream events
+   * @throws {StromboliError} On HTTP errors, timeouts, or aborts
+   *
+   * @example
+   * ```typescript
+   * for await (const event of client.streamAgent('agent-abc123')) {
+   *   switch (event.type) {
+   *     case 'message':
+   *       console.log(event.event, event.data)
+   *       break
+   *     case 'error':
+   *       console.error(event.error)
+   *       break
+   *     case 'done':
+   *       return
+   *   }
+   * }
+   * ```
+   *
+   * @see {@link sendToAgent} - To send a turn
+   */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: SSE parsing with multiple timeout types
+  async *streamAgent(
+    agentId: string,
+    options: StreamOptions = {}
+  ): AsyncGenerator<AgentStreamEvent> {
+    const {
+      connectionTimeout = 30000,
+      idleTimeout = 60000,
+      maxDuration,
+      signal: externalSignal,
+    } = options
+
+    const controller = new AbortController()
+    let idleTimer: ReturnType<typeof setTimeout> | undefined
+    let connectionTimer: ReturnType<typeof setTimeout> | undefined
+    let maxDurationTimer: ReturnType<typeof setTimeout> | undefined
+    let isConnected = false
+    let isUserAborted = false
+    let isMaxDurationExceeded = false
+
+    if (externalSignal) {
+      if (externalSignal.aborted) {
+        throw StromboliError.abortedError()
+      }
+      externalSignal.addEventListener('abort', () => {
+        isUserAborted = true
+        this.log('Agent stream aborted by user')
+        controller.abort()
+      })
+    }
+
+    const resetIdleTimer = () => {
+      if (idleTimer) clearTimeout(idleTimer)
+      idleTimer = setTimeout(() => {
+        this.log('Agent stream idle timeout', { idleTimeout })
+        controller.abort()
+      }, idleTimeout)
+    }
+
+    connectionTimer = setTimeout(() => {
+      if (!isConnected) {
+        this.log('Agent stream connection timeout', { connectionTimeout })
+        controller.abort()
+      }
+    }, connectionTimeout)
+
+    if (maxDuration !== undefined) {
+      maxDurationTimer = setTimeout(() => {
+        isMaxDurationExceeded = true
+        this.log('Agent stream max duration exceeded', { maxDuration })
+        controller.abort()
+      }, maxDuration)
+    }
+
+    try {
+      const url = `${this.baseUrl}/agents/${encodeURIComponent(agentId)}/stream`
+      const requestId = this.generateRequestId()
+
+      const headers: Record<string, string> = {
+        Accept: 'text/event-stream',
+        'X-Request-ID': requestId,
+      }
+      if (this.authToken) {
+        headers.Authorization = `Bearer ${this.authToken}`
+      }
+
+      this.log('Agent stream started', { id: requestId, url })
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers,
+        signal: controller.signal,
+      })
+
+      isConnected = true
+      if (connectionTimer) clearTimeout(connectionTimer)
+      resetIdleTimer()
+
+      if (!response.ok) {
+        throw StromboliError.fromResponse(response.status, await response.text())
+      }
+      if (!response.body) {
+        throw new StromboliError('No response body', 'STREAM_ERROR')
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let pendingEvent = 'message'
+      let pendingData: string[] = []
+
+      const flush = (): AgentStreamEvent | undefined => {
+        if (pendingData.length === 0) {
+          pendingEvent = 'message'
+          return undefined
+        }
+        const raw = pendingData.join('\n')
+        pendingData = []
+        const event = pendingEvent
+        pendingEvent = 'message'
+        let parsed: unknown = raw
+        try {
+          parsed = JSON.parse(raw)
+        } catch {
+          // Leave as raw string if not JSON
+        }
+        return { type: 'message', event, data: parsed }
+      }
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) {
+          const final = flush()
+          if (final) yield final
+          this.log('Agent stream completed')
+          yield { type: 'done' }
+          break
+        }
+
+        resetIdleTimer()
+
+        buffer += decoder.decode(value, { stream: true })
+        let newlineIndex = buffer.indexOf('\n')
+        while (newlineIndex !== -1) {
+          const rawLine = buffer.slice(0, newlineIndex)
+          buffer = buffer.slice(newlineIndex + 1)
+          const line = rawLine.replace(/\r$/, '')
+
+          if (line === '') {
+            const ev = flush()
+            if (ev) yield ev
+          } else if (line.startsWith(':')) {
+            // SSE comment — ignore
+          } else if (line.startsWith('event:')) {
+            pendingEvent = line.slice(6).trim() || 'message'
+          } else if (line.startsWith('data:')) {
+            pendingData.push(line.slice(5).replace(/^ /, ''))
+          } else if (line.startsWith('error:')) {
+            yield { type: 'error', error: line.slice(6).trim() }
+          }
+          newlineIndex = buffer.indexOf('\n')
+        }
+      }
+    } catch (err) {
+      if (err instanceof StromboliError) {
+        throw err
+      }
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        if (isUserAborted) {
+          throw StromboliError.abortedError()
+        }
+        if (isMaxDurationExceeded) {
+          throw new StromboliError(
+            `Agent stream exceeded max duration of ${maxDuration}ms`,
+            'MAX_DURATION_EXCEEDED'
+          )
+        }
+        throw new StromboliError(
+          isConnected
+            ? `Agent stream idle timeout after ${idleTimeout}ms`
+            : `Agent stream connection timeout after ${connectionTimeout}ms`,
+          isConnected ? 'IDLE_TIMEOUT' : 'CONNECTION_TIMEOUT'
+        )
+      }
+      throw StromboliError.networkError(err)
+    } finally {
+      if (idleTimer) clearTimeout(idleTimer)
+      if (connectionTimer) clearTimeout(connectionTimer)
+      if (maxDurationTimer) clearTimeout(maxDurationTimer)
+    }
+  }
+
+  // ==========================================================================
+  // Container Images
+  // ==========================================================================
+
+  /**
+   * List local container images, sorted by Stromboli compatibility rank.
+   *
+   * Useful for discovering which of your local images can be passed to
+   * {@link run} via the `image` option without surprises.
+   *
+   * @returns List of local images
+   * @throws {StromboliError} When the API returns an error
+   *
+   * @example
+   * ```typescript
+   * const { images } = await client.listImages()
+   * for (const img of images ?? []) {
+   *   console.log(`${img.repository}:${img.tag} — rank ${img.compatibility_rank}`)
+   * }
+   * ```
+   *
+   * @see {@link inspectImage} - For full image metadata
+   * @see {@link pullImage} - To fetch a missing image
+   */
+  async listImages(): Promise<ImagesListResponse> {
+    return this.request(
+      (signal) => this.api.GET('/images', { signal }) as Promise<ApiResult<ImagesListResponse>>
+    )
+  }
+
+  /**
+   * Inspect a single image, including its labels and a human-readable
+   * compatibility description.
+   *
+   * @param name - Image name with optional tag (e.g. `python:3.12-slim`)
+   * @returns Detailed image metadata
+   * @throws {StromboliError} When the image is not found locally
+   *
+   * @example
+   * ```typescript
+   * const img = await client.inspectImage('python:3.12-slim')
+   * console.log(img.rank_description, img.tools)
+   * ```
+   *
+   * @see {@link listImages} - To enumerate images
+   */
+  async inspectImage(name: string): Promise<ImageDetail> {
+    return this.request(
+      (signal) =>
+        this.api.GET('/images/{name}', {
+          params: { path: { name } },
+          signal,
+        }) as Promise<ApiResult<ImageDetail>>
+    )
+  }
+
+  /**
+   * Pull a container image from a registry.
+   *
+   * Blocks until the pull completes. Supports passing a target platform
+   * for multi-arch registries.
+   *
+   * @param request - Image reference + optional platform/quiet flag
+   * @returns Pull result (success flag, resolved image_id)
+   * @throws {StromboliError} When the pull fails (e.g., auth, network, not found)
+   *
+   * @example
+   * ```typescript
+   * const result = await client.pullImage({
+   *   image: 'python:3.12-slim',
+   *   platform: 'linux/amd64',
+   * })
+   * if (result.success) {
+   *   console.log(`Pulled ${result.image_id}`)
+   * }
+   * ```
+   */
+  async pullImage(request: ImagePullRequest): Promise<ImagePullResponse> {
+    return this.request(
+      (signal) =>
+        this.api.POST('/images/pull', {
+          body: request,
+          signal,
+        }) as Promise<ApiResult<ImagePullResponse>>
+    )
+  }
+
+  /**
+   * Search container registries for images matching a query.
+   *
+   * @param query - Search term (e.g., 'python')
+   * @param options - Optional limit and full-description toggle
+   * @returns Search results
+   * @throws {StromboliError} When the search fails
+   *
+   * @example
+   * ```typescript
+   * const { results } = await client.searchImages('python', { limit: 5 })
+   * for (const r of results ?? []) {
+   *   console.log(r)
+   * }
+   * ```
+   */
+  async searchImages(
+    query: string,
+    options?: { limit?: number; noTrunc?: boolean }
+  ): Promise<ImageSearchResponse> {
+    return this.request(
+      (signal) =>
+        this.api.GET('/images/search', {
+          params: {
+            query: {
+              q: query,
+              limit: options?.limit,
+              no_trunc: options?.noTrunc,
+            },
+          },
+          signal,
+        }) as Promise<ApiResult<ImageSearchResponse>>
+    )
   }
 }

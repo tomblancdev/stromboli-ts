@@ -32,6 +32,18 @@ type SecretsListResponse = components['schemas']['internal_api.SecretsListRespon
 type TokenResponse = components['schemas']['internal_api.TokenResponse']
 type ValidateResponse = components['schemas']['internal_api.ValidateResponse']
 type ClaudeStatusResponse = components['schemas']['internal_api.ClaudeStatusResponse']
+type AgentSnapshot = components['schemas']['stromboli_internal_agent.Snapshot']
+type CreateAgentResponse = components['schemas']['internal_api.CreateAgentResponse']
+type SendAgentResponse = components['schemas']['internal_api.SendAgentResponse']
+type ImageInfoResponse = components['schemas']['internal_api.ImageInfoResponse']
+type ImageDetailResponse = components['schemas']['internal_api.ImageDetailResponse']
+type ImagesListResponse = components['schemas']['internal_api.ImagesListResponse']
+type ImagePullResponse = components['schemas']['internal_api.ImagePullResponse']
+type ImageSearchResponse = components['schemas']['internal_api.ImageSearchResponse']
+type CreateSecretResponse = components['schemas']['internal_api.CreateSecretResponse']
+type SecretInfoResponse = components['schemas']['internal_api.SecretInfoResponse']
+type DeleteSecretResponse = components['schemas']['internal_api.DeleteSecretResponse']
+type SessionMessageResponse = components['schemas']['internal_api.SessionMessageResponse']
 
 // ============================================================================
 // ID Generators
@@ -67,6 +79,22 @@ export function createSessionId(): string {
  */
 export function createUuid(): string {
   return faker.string.uuid()
+}
+
+/**
+ * Generate a unique agent ID.
+ * @example "agent-abc123def456"
+ */
+export function createAgentId(): string {
+  return `agent-${faker.string.alphanumeric(12)}`
+}
+
+/**
+ * Generate a unique turn ID.
+ * @example "turn-abc123"
+ */
+export function createTurnId(): string {
+  return `turn-${faker.string.alphanumeric(8)}`
 }
 
 // ============================================================================
@@ -450,4 +478,180 @@ export function createMixedStatusJobs(): JobResponse[] {
     createJobResponse({ status: 'pending' }),
     createJobResponse({ status: 'failed' }),
   ]
+}
+
+// ============================================================================
+// Persistent Agent Factories
+// ============================================================================
+
+/**
+ * Create a mock AgentSnapshot.
+ */
+export function createAgentSnapshot(overrides: Partial<AgentSnapshot> = {}): AgentSnapshot {
+  const created = faker.date.recent({ days: 1 })
+  return {
+    id: createAgentId(),
+    session_id: createSessionId(),
+    status: 'running',
+    turns_completed: faker.number.int({ min: 0, max: 12 }),
+    idle_timeout_seconds: 1800,
+    idle_timeout_disabled: false,
+    created_at: created.toISOString(),
+    last_activity_at: new Date().toISOString(),
+    ...overrides,
+  }
+}
+
+/**
+ * Create a mock CreateAgentResponse (same shape as snapshot).
+ */
+export function createCreateAgentResponse(
+  overrides: Partial<CreateAgentResponse> = {}
+): CreateAgentResponse {
+  return createAgentSnapshot(overrides) as CreateAgentResponse
+}
+
+/**
+ * Create a mock SendAgentResponse.
+ */
+export function createSendAgentResponse(
+  overrides: Partial<SendAgentResponse> = {}
+): SendAgentResponse {
+  return {
+    turn_id: createTurnId(),
+    ...overrides,
+  }
+}
+
+// ============================================================================
+// Container Image Factories
+// ============================================================================
+
+/**
+ * Create a mock ImageInfoResponse.
+ */
+export function createImageInfo(overrides: Partial<ImageInfoResponse> = {}): ImageInfoResponse {
+  return {
+    id: `sha256:${faker.string.alphanumeric(64)}`,
+    repository: 'python',
+    tag: '3.12-slim',
+    size: faker.number.int({ min: 50_000_000, max: 500_000_000 }),
+    created: faker.date.recent({ days: 30 }).toISOString(),
+    compatible: true,
+    compatibility_rank: 3,
+    has_claude_cli: false,
+    tools: ['python', 'pip'],
+    description: 'Python development image',
+    ...overrides,
+  }
+}
+
+/**
+ * Create a mock ImageDetailResponse.
+ */
+export function createImageDetail(
+  overrides: Partial<ImageDetailResponse> = {}
+): ImageDetailResponse {
+  return {
+    ...createImageInfo(),
+    rank_description: 'Standard glibc-based (compatible)',
+    labels: { maintainer: 'docker' },
+    ...overrides,
+  }
+}
+
+/**
+ * Create a mock ImagesListResponse.
+ */
+export function createImagesListResponse(
+  count = 3,
+  overrides: Partial<ImagesListResponse> = {}
+): ImagesListResponse {
+  return {
+    images: Array.from({ length: count }, () => createImageInfo()),
+    ...overrides,
+  }
+}
+
+/**
+ * Create a mock ImagePullResponse.
+ */
+export function createImagePullResponse(
+  overrides: Partial<ImagePullResponse> = {}
+): ImagePullResponse {
+  return {
+    success: true,
+    image: 'python:3.12-slim',
+    image_id: `sha256:${faker.string.alphanumeric(64)}`,
+    ...overrides,
+  }
+}
+
+/**
+ * Create a mock ImageSearchResponse.
+ */
+export function createImageSearchResponse(
+  overrides: Partial<ImageSearchResponse> = {}
+): ImageSearchResponse {
+  return {
+    results: [],
+    ...overrides,
+  }
+}
+
+// ============================================================================
+// Secret CRUD Factories
+// ============================================================================
+
+/**
+ * Create a mock CreateSecretResponse.
+ */
+export function createCreateSecretResponse(
+  overrides: Partial<CreateSecretResponse> = {}
+): CreateSecretResponse {
+  return {
+    success: true,
+    name: 'github-token',
+    error: undefined,
+    ...overrides,
+  }
+}
+
+/**
+ * Create a mock SecretInfoResponse.
+ */
+export function createSecretInfo(overrides: Partial<SecretInfoResponse> = {}): SecretInfoResponse {
+  return {
+    id: faker.string.alphanumeric(12),
+    name: 'github-token',
+    created_at: faker.date.recent({ days: 30 }).toISOString(),
+    ...overrides,
+  }
+}
+
+/**
+ * Create a mock DeleteSecretResponse.
+ */
+export function createDeleteSecretResponse(
+  overrides: Partial<DeleteSecretResponse> = {}
+): DeleteSecretResponse {
+  return {
+    success: true,
+    name: 'github-token',
+    error: undefined,
+    ...overrides,
+  }
+}
+
+// ============================================================================
+// Single Session Message Factory
+// ============================================================================
+
+/**
+ * Create a mock SessionMessageResponse (a single Message).
+ */
+export function createSessionMessageResponse(
+  overrides: Partial<SessionMessageResponse> = {}
+): SessionMessageResponse {
+  return createMessage('assistant', overrides as Partial<Message>) as SessionMessageResponse
 }
