@@ -26,8 +26,8 @@
     "typecheck": "bunx tsc --noEmit"
   },
   "stromboli": {
-    "apiVersion": "0.3.0-alpha",
-    "apiVersionRange": ">=0.3.0-alpha"
+    "apiVersion": "0.5.6-alpha",
+    "apiVersionRange": ">=0.5.6-alpha"
   },
   "keywords": ["stromboli", "claude", "anthropic", "container", "orchestration", "sdk"],
   "author": "Tom Blanc",
