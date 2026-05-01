@@ -9,7 +9,7 @@
 
 import packageJson from '../package.json' with { type: 'json' }
 import { StromboliError } from './errors'
-import { type StromboliApiClient, createStromboliClient } from './generated/api'
+import { createStromboliClient, type StromboliApiClient } from './generated/api'
 import type { components } from './generated/types'
 
 // ============================================================================
