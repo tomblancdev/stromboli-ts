@@ -1,0 +1,122 @@
+name: Sync OpenAPI from stromboli
+
+# Triggered automatically by stromboli's release workflow via
+# repository_dispatch (event_type=stromboli-released), or manually
+# via workflow_dispatch with a tag input.
+#
+# Protocol details + receiver template:
+#   https://tomblancdev.github.io/stromboli/development/sdk-contract/
+
+on:
+  repository_dispatch:
+    types: [stromboli-released]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'stromboli tag to sync against (e.g. v0.5.5-alpha). Leave blank to use latest release.'
+        required: false
+      swagger_url:
+        description: 'Override swagger URL (optional — only set if testing a draft tag)'
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve dispatch payload
+        id: payload
+        run: |
+          # Three ways the version can arrive:
+          #   1. repository_dispatch  → client_payload.version
+          #   2. workflow_dispatch    → inputs.version
+          #   3. workflow_dispatch with empty input → fall back to latest release
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+            SWAGGER_URL="${{ inputs.swagger_url }}"
+            if [ -z "$VERSION" ]; then
+              # Use the public REST API directly. We can't use `gh release
+              # view --repo tomblancdev/stromboli` here because GITHUB_TOKEN
+              # is scoped to THIS repo (stromboli-ts) and gh's cross-repo
+              # reads fail with "release not found".
+              # /releases (plural) not /releases/latest — the latter 404s
+              # when the upstream only has prereleases (-alpha tags).
+              VERSION=$(curl -fsSL https://api.github.com/repos/tomblancdev/stromboli/releases | jq -r '[.[] | select(.draft == false)][0].tag_name')
+              if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+                echo "::error::Could not resolve latest stromboli release tag"
+                exit 1
+              fi
+              echo "::notice::No version input — falling back to latest release: $VERSION"
+            fi
+          else
+            VERSION="${{ github.event.client_payload.version }}"
+            SWAGGER_URL="${{ github.event.client_payload.swagger_url }}"
+          fi
+
+          # package.json:stromboli.apiVersion is stored without the leading "v"
+          # (scripts/generate.ts adds it back when building the swagger URL).
+          VERSION_NO_V="${VERSION#v}"
+
+          if [ -z "$SWAGGER_URL" ]; then
+            SWAGGER_URL="https://raw.githubusercontent.com/tomblancdev/stromboli/${VERSION}/docs/swagger/swagger.json"
+          fi
+
+          echo "version=$VERSION"             >> "$GITHUB_OUTPUT"
+          echo "version_no_v=$VERSION_NO_V"   >> "$GITHUB_OUTPUT"
+          echo "swagger_url=$SWAGGER_URL"     >> "$GITHUB_OUTPUT"
+          echo "::notice::Syncing to stromboli ${VERSION}"
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Bump pinned apiVersion
+        run: |
+          jq --arg v "${{ steps.payload.outputs.version_no_v }}" \
+             '.stromboli.apiVersion = $v | .stromboli.apiVersionRange = ">=" + $v' \
+             package.json > package.json.tmp
+          mv package.json.tmp package.json
+          echo "Updated package.json:"
+          jq '.stromboli' package.json
+
+      - name: Regenerate typed client
+        # scripts/generate.ts reads .stromboli.apiVersion from package.json
+        # and fetches the matching swagger.yaml from the upstream tag.
+        run: bun run generate
+
+      - name: Typecheck regenerated code
+        run: bun run typecheck
+
+      - name: Open PR with regenerated client
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: 'chore: sync to stromboli ${{ steps.payload.outputs.version }}'
+          title: 'chore: sync to stromboli ${{ steps.payload.outputs.version }}'
+          body: |
+            Automated sync triggered by stromboli release.
+
+            - **Server tag:** `${{ steps.payload.outputs.version }}`
+            - **Spec source:** ${{ steps.payload.outputs.swagger_url }}
+            - **Triggered by:** ${{ github.event_name == 'repository_dispatch' && 'stromboli release fan-out' || 'manual workflow_dispatch' }}
+
+            **What changed**
+            - Bumped `package.json:stromboli.apiVersion` to `${{ steps.payload.outputs.version_no_v }}`
+            - Regenerated `src/generated/{types.ts,api.ts,openapi.json}` via `bun run generate`
+            - `bun run typecheck` passed against the new types
+
+            If the diff is mechanical (added optional fields), this PR can auto-merge once CI is green. If the regen surfaces a breaking change in the public surface, hold for human review.
+
+            🤖 Auto-generated by `.github/workflows/sync-stromboli.yml`
+          branch: sync-stromboli-${{ steps.payload.outputs.version }}
+          delete-branch: true
+          labels: stromboli-sync, automated
