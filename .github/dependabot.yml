@@ -1,0 +1,79 @@
+version: 2
+updates:
+  # npm / bun dependencies
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - automated
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      # Bundle dev-only deps so we don't drown in PRs.
+      dev-dependencies:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+      # Bundle minor/patch runtime bumps; majors still get their own PR.
+      runtime-minor-patch:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+
+  # docs/ subdir has its own package.json (fumadocs site)
+  - package-ecosystem: npm
+    directory: "/docs"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - automated
+      - docs
+    commit-message:
+      prefix: "chore(docs)"
+      include: scope
+    groups:
+      docs-dev-dependencies:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+      docs-runtime-minor-patch:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+
+  # GitHub Actions workflows
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "Europe/Paris"
+    labels:
+      - dependencies
+      - automated
+      - ci
+    commit-message:
+      prefix: "chore(ci)"
+      include: scope
+    groups:
+      actions:
+        update-types:
+          - minor
+          - patch
