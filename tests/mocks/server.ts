@@ -50,6 +50,6 @@ export function stopServer(): void {
   server.close()
 }
 
-// Re-export for convenience
-export { handlers, createHandlers, MOCK_BASE_URL, jobStore, resetJobStore } from './handlers'
 export * from './factories'
+// Re-export for convenience
+export { createHandlers, handlers, jobStore, MOCK_BASE_URL, resetJobStore } from './handlers'
