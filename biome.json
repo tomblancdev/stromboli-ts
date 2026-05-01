@@ -1,5 +1,10 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.0.0/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.4.13/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
   "linter": {
     "enabled": true,
     "rules": {
@@ -30,7 +35,15 @@
     }
   },
   "files": {
-    "include": ["**/*.ts", "**/*.json"],
-    "ignore": ["node_modules", "dist", "coverage", "src/generated", "docs/.next", "docs/.source"]
+    "includes": [
+      "**/*.ts",
+      "**/*.json",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/coverage",
+      "!src/generated",
+      "!docs/.next",
+      "!docs/.source"
+    ]
   }
 }
