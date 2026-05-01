@@ -11,9 +11,7 @@
       "types": "./dist/index.d.ts"
     }
   },
-  "files": [
-    "dist"
-  ],
+  "files": ["dist"],
   "scripts": {
     "build": "bun build ./src/index.ts --outdir ./dist --target node && bunx tsc --emitDeclarationOnly --outDir ./dist",
     "test": "bun test tests/unit/",
@@ -31,14 +29,7 @@
     "apiVersion": "0.5.6-alpha",
     "apiVersionRange": ">=0.5.6-alpha"
   },
-  "keywords": [
-    "stromboli",
-    "claude",
-    "anthropic",
-    "container",
-    "orchestration",
-    "sdk"
-  ],
+  "keywords": ["stromboli", "claude", "anthropic", "container", "orchestration", "sdk"],
   "author": "Tom Blanc",
   "license": "MIT",
   "repository": {
