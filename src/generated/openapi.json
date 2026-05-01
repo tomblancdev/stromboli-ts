@@ -15,6 +15,275 @@
     "version": "1.0"
   },
   "paths": {
+    "/agents": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/stromboli_internal_agent.Snapshot"
+                  },
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List persistent agents",
+        "tags": [
+          "agents"
+        ]
+      },
+      "post": {
+        "description": "Launches a long-lived Claude container with stream-json I/O.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/stromboli_internal_agent.CreateRequest"
+              }
+            }
+          },
+          "description": "Agent configuration",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.CreateAgentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.errorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Spawn failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.errorBody"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Spawn a persistent agent",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/agents/{id}": {
+      "delete": {
+        "parameters": [
+          {
+            "description": "Agent ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.errorBody"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Stop a persistent agent",
+        "tags": [
+          "agents"
+        ]
+      },
+      "get": {
+        "parameters": [
+          {
+            "description": "Agent ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/stromboli_internal_agent.Snapshot"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.errorBody"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get persistent agent",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/agents/{id}/send": {
+      "post": {
+        "parameters": [
+          {
+            "description": "Agent ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/internal_api.SendAgentRequest"
+              }
+            }
+          },
+          "description": "Prompt",
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.SendAgentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.errorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.errorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Turn already in progress",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.errorBody"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Agent has exited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.errorBody"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Send a turn to a persistent agent",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/agents/{id}/stream": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Agent ID",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE stream of agent.Event objects",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.errorBody"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Stream a persistent agent's events (SSE)",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
     "/auth/logout": {
       "post": {
         "description": "Invalidates a JWT token by adding it to the blacklist",
@@ -248,6 +517,233 @@
         ]
       }
     },
+    "/images": {
+      "get": {
+        "description": "Returns all local container images sorted by compatibility rank. Images with rank 1-2 are verified compatible, rank 3 is standard glibc (compatible), rank 4 is incompatible (Alpine/musl).",
+        "responses": {
+          "200": {
+            "description": "List of images (empty array if none exist)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.ImagesListResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List images",
+        "tags": [
+          "images"
+        ]
+      }
+    },
+    "/images/{name}": {
+      "get": {
+        "description": "Returns detailed information about a specific container image including all labels and compatibility information.",
+        "parameters": [
+          {
+            "description": "Image name with optional tag",
+            "example": "python:3.12-slim",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Image details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.ImageDetailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid image name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Image not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Inspect image",
+        "tags": [
+          "images"
+        ]
+      }
+    },
+    "/images/pull": {
+      "post": {
+        "description": "Pulls a container image from a registry. This operation may take some time for large images.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/internal_api.ImagePullRequest"
+              }
+            }
+          },
+          "description": "Pull request",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Image pulled successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.ImagePullResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Pull failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Pull image",
+        "tags": [
+          "images"
+        ]
+      }
+    },
+    "/images/search": {
+      "get": {
+        "description": "Searches container registries for images matching the query. Returns results from Docker Hub and other configured registries.",
+        "parameters": [
+          {
+            "description": "Search query",
+            "example": "python",
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Maximum number of results (default 25, max 100)",
+            "example": 10,
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Don't truncate output (show full descriptions)",
+            "example": true,
+            "in": "query",
+            "name": "no_trunc",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.ImageSearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request (missing query)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Registry search failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Search images",
+        "tags": [
+          "images"
+        ]
+      }
+    },
     "/jobs": {
       "get": {
         "description": "Returns all async jobs",
@@ -289,8 +785,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "type": "object"
+                  "$ref": "#/components/schemas/internal_api.JobCancelResponse"
                 }
               }
             }
@@ -530,10 +1025,10 @@
     },
     "/secrets": {
       "get": {
-        "description": "Returns all available Podman secrets that can be injected into agents",
+        "description": "Returns metadata for all available Podman secrets that can be injected into agents. Secret values are never returned - only IDs, names, and creation times.",
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "List of secrets (empty array if none exist)",
             "content": {
               "application/json": {
                 "schema": {
@@ -543,7 +1038,7 @@
             }
           },
           "500": {
-            "description": "Internal Server Error",
+            "description": "Internal server error",
             "content": {
               "application/json": {
                 "schema": {
@@ -554,6 +1049,190 @@
           }
         },
         "summary": "List secrets",
+        "tags": [
+          "secrets"
+        ]
+      },
+      "post": {
+        "description": "Creates a new Podman secret that can be injected into agents. Secret names must be alphanumeric (with dashes and underscores), max 253 characters. Values are limited to 1MB.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/internal_api.CreateSecretRequest"
+              }
+            }
+          },
+          "description": "Create secret request",
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Secret created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.CreateSecretResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request (missing/invalid name or value)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.CreateSecretResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Secret with this name already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.CreateSecretResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.CreateSecretResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create secret",
+        "tags": [
+          "secrets"
+        ]
+      }
+    },
+    "/secrets/{name}": {
+      "delete": {
+        "description": "Permanently deletes a Podman secret. This action cannot be undone. Secrets currently in use by running containers may cause those containers to fail.",
+        "parameters": [
+          {
+            "description": "Secret name",
+            "example": "github-token",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Secret deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.DeleteSecretResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid secret name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.DeleteSecretResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Secret not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.DeleteSecretResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.DeleteSecretResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete secret",
+        "tags": [
+          "secrets"
+        ]
+      },
+      "get": {
+        "description": "Returns metadata about a specific Podman secret. For security, the actual secret value is never returned - only the ID, name, and creation time.",
+        "parameters": [
+          {
+            "description": "Secret name",
+            "example": "github-token",
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Secret metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.SecretInfoResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid secret name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Secret not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_api.ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get secret metadata",
         "tags": [
           "secrets"
         ]
@@ -826,6 +1505,10 @@
           "job_id": {
             "example": "job-abc123def456",
             "type": "string"
+          },
+          "session_id": {
+            "example": "550e8400-e29b-41d4-a716-446655440000",
+            "type": "string"
           }
         },
         "type": "object"
@@ -864,6 +1547,91 @@
         },
         "type": "object"
       },
+      "internal_api.CreateAgentResponse": {
+        "description": "Created agent metadata",
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "exit_error": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "idle_timeout_disabled": {
+            "type": "boolean"
+          },
+          "idle_timeout_seconds": {
+            "type": "integer"
+          },
+          "last_activity_at": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/stromboli_internal_agent.Status"
+          },
+          "turns_completed": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "internal_api.CreateSecretRequest": {
+        "description": "Request to create a new Podman secret",
+        "properties": {
+          "name": {
+            "example": "github-token",
+            "type": "string"
+          },
+          "value": {
+            "example": "ghp_xxxxxxxxxxxx",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ],
+        "type": "object"
+      },
+      "internal_api.CreateSecretResponse": {
+        "description": "Result of secret creation",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "name": {
+            "example": "github-token",
+            "type": "string"
+          },
+          "success": {
+            "example": true,
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "internal_api.DeleteSecretResponse": {
+        "description": "Result of secret deletion",
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "name": {
+            "example": "github-token",
+            "type": "string"
+          },
+          "success": {
+            "example": true,
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "internal_api.ErrorResponse": {
         "properties": {
           "error": {
@@ -891,6 +1659,197 @@
           },
           "version": {
             "example": "0.1.4",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "internal_api.ImageDetailResponse": {
+        "description": "Detailed container image information including labels",
+        "properties": {
+          "compatibility_rank": {
+            "example": 3,
+            "type": "integer"
+          },
+          "compatible": {
+            "example": true,
+            "type": "boolean"
+          },
+          "created": {
+            "example": "2024-01-15T10:30:00Z",
+            "type": "string"
+          },
+          "description": {
+            "example": "Python development image",
+            "type": "string"
+          },
+          "has_claude_cli": {
+            "example": false,
+            "type": "boolean"
+          },
+          "id": {
+            "example": "sha256:abc123def456",
+            "type": "string"
+          },
+          "labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "rank_description": {
+            "example": "Standard glibc-based (compatible)",
+            "type": "string"
+          },
+          "repository": {
+            "example": "python",
+            "type": "string"
+          },
+          "size": {
+            "example": 125000000,
+            "type": "integer"
+          },
+          "tag": {
+            "example": "3.12-slim",
+            "type": "string"
+          },
+          "tools": {
+            "example": [
+              "python",
+              "pip"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "internal_api.ImageInfoResponse": {
+        "description": "Container image metadata with compatibility information",
+        "properties": {
+          "compatibility_rank": {
+            "example": 3,
+            "type": "integer"
+          },
+          "compatible": {
+            "example": true,
+            "type": "boolean"
+          },
+          "created": {
+            "example": "2024-01-15T10:30:00Z",
+            "type": "string"
+          },
+          "description": {
+            "example": "Python development image",
+            "type": "string"
+          },
+          "has_claude_cli": {
+            "example": false,
+            "type": "boolean"
+          },
+          "id": {
+            "example": "sha256:abc123def456",
+            "type": "string"
+          },
+          "repository": {
+            "example": "python",
+            "type": "string"
+          },
+          "size": {
+            "example": 125000000,
+            "type": "integer"
+          },
+          "tag": {
+            "example": "3.12-slim",
+            "type": "string"
+          },
+          "tools": {
+            "example": [
+              "python",
+              "pip"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "internal_api.ImagePullRequest": {
+        "description": "Request to pull a container image from a registry",
+        "properties": {
+          "image": {
+            "example": "python:3.12-slim",
+            "type": "string"
+          },
+          "platform": {
+            "example": "linux/amd64",
+            "type": "string"
+          },
+          "quiet": {
+            "example": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "image"
+        ],
+        "type": "object"
+      },
+      "internal_api.ImagePullResponse": {
+        "description": "Result of image pull operation",
+        "properties": {
+          "image": {
+            "example": "python:3.12-slim",
+            "type": "string"
+          },
+          "image_id": {
+            "example": "sha256:abc123def456",
+            "type": "string"
+          },
+          "success": {
+            "example": true,
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "internal_api.ImageSearchResponse": {
+        "description": "Search results from container registries",
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/internal_api.SearchResultResponse"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "internal_api.ImagesListResponse": {
+        "description": "List of local container images sorted by compatibility",
+        "properties": {
+          "images": {
+            "items": {
+              "$ref": "#/components/schemas/internal_api.ImageInfoResponse"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "internal_api.JobCancelResponse": {
+        "description": "Result of a job cancel request",
+        "properties": {
+          "cancelled": {
+            "example": true,
+            "type": "boolean"
+          },
+          "job_id": {
+            "example": "job-abc123def456",
             "type": "string"
           }
         },
@@ -940,6 +1899,9 @@
               }
             ],
             "example": "running"
+          },
+          "structured_output": {
+            "type": "object"
           },
           "updated_at": {
             "example": "2024-01-15T10:31:00Z",
@@ -1013,6 +1975,14 @@
       "internal_api.RunResponse": {
         "description": "Response from Claude execution",
         "properties": {
+          "crash_info": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/stromboli_internal_job.CrashInfo"
+              }
+            ],
+            "description": "Crash details (when status is \"crashed\")"
+          },
           "error": {
             "description": "Error message (when failed)",
             "example": "",
@@ -1024,7 +1994,7 @@
             "type": "string"
           },
           "output": {
-            "description": "Claude's output (when successful)",
+            "description": "Claude's raw output (full CLI output, including JSON envelope when output_format=json)",
             "example": "Here is my analysis...",
             "type": "string"
           },
@@ -1034,8 +2004,68 @@
             "type": "string"
           },
           "status": {
-            "description": "Execution status: completed, error",
+            "description": "Execution status: completed, crashed, error",
             "example": "completed",
+            "type": "string"
+          },
+          "structured_output": {
+            "description": "Extracted structured_output from Claude's JSON envelope (when json_schema is used).\nConvenience field so callers don't need to parse the envelope themselves.",
+            "type": "object"
+          },
+          "usage": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/stromboli_internal_job.Usage"
+              }
+            ],
+            "description": "Token usage totals + estimated USD cost. Populated best-effort from the\nsession's JSONL; nil when the session file isn't readable yet or no\nassistant message reported usage."
+          }
+        },
+        "type": "object"
+      },
+      "internal_api.SearchResultResponse": {
+        "description": "Search result from a container registry",
+        "properties": {
+          "automated": {
+            "example": false,
+            "type": "boolean"
+          },
+          "description": {
+            "example": "Python is an interpreted programming language",
+            "type": "string"
+          },
+          "index": {
+            "example": "docker.io",
+            "type": "string"
+          },
+          "name": {
+            "example": "python",
+            "type": "string"
+          },
+          "official": {
+            "example": true,
+            "type": "boolean"
+          },
+          "stars": {
+            "example": 8500,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "internal_api.SecretInfoResponse": {
+        "description": "Secret metadata (never contains the actual secret value)",
+        "properties": {
+          "created_at": {
+            "example": "2024-01-15T10:30:00Z",
+            "type": "string"
+          },
+          "id": {
+            "example": "abc123def456",
+            "type": "string"
+          },
+          "name": {
+            "example": "github-token",
             "type": "string"
           }
         },
@@ -1048,14 +2078,33 @@
             "type": "string"
           },
           "secrets": {
-            "example": [
-              "github-token",
-              "gitlab-token"
-            ],
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/internal_api.SecretInfoResponse"
             },
             "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "internal_api.SendAgentRequest": {
+        "description": "Append a prompt to a running agent's stream-json stdin",
+        "properties": {
+          "prompt": {
+            "example": "Tell me about that alert",
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt"
+        ],
+        "type": "object"
+      },
+      "internal_api.SendAgentResponse": {
+        "description": "Acknowledgement that a turn has started; output streams via /stream",
+        "properties": {
+          "turn_id": {
+            "example": "turn-abc123",
+            "type": "string"
           }
         },
         "type": "object"
@@ -1077,19 +2126,30 @@
         },
         "type": "object"
       },
+      "internal_api.SessionInfo": {
+        "description": "Metadata about a single session",
+        "properties": {
+          "id": {
+            "example": "sess-abc123",
+            "type": "string"
+          },
+          "title": {
+            "description": "Title is set by a UserPromptSubmit hook returning\nhookSpecificOutput.sessionTitle (or by /rename in interactive mode).\nEmpty when no title was ever set for this session.",
+            "example": "Refactor billing service",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "internal_api.SessionListResponse": {
-        "description": "List of existing sessions",
+        "description": "List of existing sessions with metadata",
         "properties": {
           "error": {
             "type": "string"
           },
           "sessions": {
-            "example": [
-              "sess-abc123",
-              "sess-def456"
-            ],
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/internal_api.SessionInfo"
             },
             "type": "array"
           }
@@ -1173,6 +2233,95 @@
           }
         },
         "type": "object"
+      },
+      "internal_api.errorBody": {
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "stromboli_internal_agent.CreateRequest": {
+        "description": "Configuration for spawning a long-lived Claude agent",
+        "properties": {
+          "claude": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/stromboli_internal_types.ClaudeOptions"
+              }
+            ],
+            "description": "Claude CLI options forwarded to the command builder. Same shape as\nRunRequest.claude so callers don't have to learn two schemas — the\nfield is fully typed in OpenAPI rather than a freeform object."
+          },
+          "disable_idle_timeout": {
+            "description": "DisableIdleTimeout opts the agent out of the idle watchdog entirely.\nThe agent will run until DELETE /agents/{id} or server shutdown — no\nauto-stop on inactivity. Use only for service bots where the caller\nowns the lifecycle explicitly; an agent with this set CAN'T leak by\nbeing forgotten, so the safety net you'd otherwise have is gone.\nStromboli logs a loud WARN on spawn so the override is visible.",
+            "example": false,
+            "type": "boolean"
+          },
+          "idle_timeout_seconds": {
+            "description": "Idle-timeout override in seconds. Zero means \"use the manager default\n(DefaultIdleTimeout)\". Negative values are rejected at parse time.\nIgnored when DisableIdleTimeout is true.",
+            "example": 1800,
+            "type": "integer"
+          },
+          "prompt": {
+            "description": "Initial prompt sent as the first turn. Optional — callers can also\ncreate an empty agent and use /send for the first interaction.",
+            "example": "You are an on-call assistant.",
+            "type": "string"
+          },
+          "workdir": {
+            "description": "Working directory inside the container.",
+            "example": "/workspace",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "stromboli_internal_agent.Snapshot": {
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "exit_error": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "idle_timeout_disabled": {
+            "type": "boolean"
+          },
+          "idle_timeout_seconds": {
+            "type": "integer"
+          },
+          "last_activity_at": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/stromboli_internal_agent.Status"
+          },
+          "turns_completed": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "stromboli_internal_agent.Status": {
+        "enum": [
+          "starting",
+          "idle",
+          "generating",
+          "exited"
+        ],
+        "type": "string",
+        "x-enum-varnames": [
+          "StatusStarting",
+          "StatusIdle",
+          "StatusGenerating",
+          "StatusExited"
+        ]
       },
       "stromboli_internal_history.ContentBlock": {
         "description": "A content block (text, tool_use, or tool_result)",
@@ -1437,6 +2586,34 @@
           "StatusCancelled"
         ]
       },
+      "stromboli_internal_job.Usage": {
+        "properties": {
+          "cache_creation_input_tokens": {
+            "type": "integer"
+          },
+          "cache_read_input_tokens": {
+            "type": "integer"
+          },
+          "estimated_cost_usd": {
+            "description": "EstimatedCostUSD is best-effort: tokens × Anthropic's published\nper-1M rates, summed across all four buckets. Zero when the model\nisn't recognized or no usage was reported.",
+            "type": "number"
+          },
+          "input_tokens": {
+            "type": "integer"
+          },
+          "model": {
+            "description": "Model identifier reported by Claude (e.g. \"claude-opus-4-7-20260101\").\nEmpty when the model is unknown — cost estimation skipped in that case.",
+            "type": "string"
+          },
+          "output_tokens": {
+            "type": "integer"
+          },
+          "total_tokens": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
       "stromboli_internal_types.ClaudeOptions": {
         "description": "All available Claude CLI options for headless execution",
         "properties": {
@@ -1478,6 +2655,11 @@
             "example": "Focus on security best practices",
             "type": "string"
           },
+          "bedrock_service_tier": {
+            "description": "Bedrock service tier when running against AWS Bedrock as the model\nbackend. Valid values: \"default\", \"flex\", \"priority\". Translates to\nANTHROPIC_BEDROCK_SERVICE_TIER. Ignored when not on Bedrock. (#77)",
+            "example": "priority",
+            "type": "string"
+          },
           "betas": {
             "description": "Beta headers for API requests",
             "items": {
@@ -1515,6 +2697,16 @@
             },
             "type": "array"
           },
+          "effort": {
+            "description": "Effort level for thinking/agentic complexity. Valid values per the\nupstream CLI reference: low, medium, high, xhigh, max. The accepted\nsubset depends on the model — Claude rejects unsupported levels at\nruntime, so Stromboli does not gate on an enum here.",
+            "example": "high",
+            "type": "string"
+          },
+          "enable_powershell_tool": {
+            "description": "Opt into Claude Code's native PowerShell tool on Windows agent hosts.\nTranslates to CLAUDE_CODE_USE_POWERSHELL_TOOL=1. No-op on non-Windows\ncontainers. (#81)",
+            "example": false,
+            "type": "boolean"
+          },
           "fallback_model": {
             "description": "Fallback model when default is overloaded",
             "example": "haiku",
@@ -1548,9 +2740,14 @@
             "type": "string"
           },
           "max_budget_usd": {
-            "description": "Maximum dollar amount for API calls",
+            "description": "Maximum dollar amount for API calls (pointer to distinguish 0 from unset)",
             "example": 5,
             "type": "number"
+          },
+          "max_turns": {
+            "description": "Maximum number of agentic turns (0 = unlimited, nil = use CLI default)",
+            "example": 30,
+            "type": "integer"
           },
           "mcp_configs": {
             "description": "MCP server config files or JSON strings",
@@ -1585,6 +2782,11 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "prompt_caching_ttl": {
+            "description": "Prompt cache TTL. \"\" leaves Claude's default; \"5m\" sets\nFORCE_PROMPT_CACHING_5M=1; \"1h\" sets ENABLE_PROMPT_CACHING_1H=1.\nUseful for long-lived agent loops where the same context is re-used\nacross many turns. (#76)",
+            "example": "1h",
+            "type": "string"
           },
           "replay_user_messages": {
             "description": "Re-emit user messages on stdout",
@@ -1646,11 +2848,78 @@
         },
         "type": "object"
       },
+      "stromboli_internal_types.EnvironmentConfig": {
+        "description": "Runtime environment configuration (single container or compose)",
+        "properties": {
+          "build_timeout": {
+            "description": "Optional build timeout override for compose (e.g., \"15m\")\nIf not specified, uses server default (10m)",
+            "example": "15m",
+            "type": "string"
+          },
+          "path": {
+            "description": "Path to compose file (required when type=\"compose\")\nMust be an absolute path ending in .yml or .yaml",
+            "example": "/home/user/project/docker-compose.yml",
+            "type": "string"
+          },
+          "service": {
+            "description": "Service name where Claude will run (required when type=\"compose\")",
+            "example": "dev",
+            "type": "string"
+          },
+          "type": {
+            "description": "Type of environment: \"\" (default single container) or \"compose\"",
+            "example": "compose",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "stromboli_internal_types.LifecycleHooks": {
+        "description": "Commands to run at specific container lifecycle stages",
+        "properties": {
+          "hooks_timeout": {
+            "description": "HooksTimeout is the maximum duration for all hooks combined (e.g., \"5m\", \"30s\").\nIf not specified, hooks run with the container's timeout.\nThis is useful to prevent long-running hooks from blocking the main command.",
+            "example": "5m",
+            "type": "string"
+          },
+          "on_create_command": {
+            "description": "OnCreateCommand runs after container creation, before Claude starts (first run only).\nEach element is a complete shell command string (devcontainer-style).\nExample: [\"apt-get update && apt-get install -y git\", \"pip install -r requirements.txt\"]",
+            "example": [
+              "pip install -r requirements.txt"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "post_create": {
+            "description": "PostCreate runs after OnCreateCommand completes (first run only).\nEach element is a complete shell command string (devcontainer-style).",
+            "example": [
+              "npm run setup"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "post_start": {
+            "description": "PostStart runs after container starts (every run, including continues).\nEach element is a complete shell command string (devcontainer-style).",
+            "example": [
+              "redis-server --daemonize yes"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "stromboli_internal_types.PodmanOptions": {
         "description": "Podman container mount configuration",
         "properties": {
           "cpu_shares": {
-            "description": "CPU shares (relative weight, default 1024)",
+            "description": "CPU shares (relative weight, default 1024; pointer to distinguish 0 from unset)",
             "example": 512,
             "type": "integer"
           },
@@ -1659,10 +2928,26 @@
             "example": "1",
             "type": "string"
           },
+          "environment": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/stromboli_internal_types.EnvironmentConfig"
+              }
+            ],
+            "description": "Environment specifies a compose-based multi-service environment.\nWhen set, the agent runs inside the specified service of the compose stack\ninstead of a standalone container."
+          },
           "image": {
             "description": "Container image override (must match allowed patterns)",
             "example": "python:3.12",
             "type": "string"
+          },
+          "lifecycle": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/stromboli_internal_types.LifecycleHooks"
+              }
+            ],
+            "description": "Lifecycle hooks for running commands at specific container events"
           },
           "memory": {
             "description": "Memory limit (e.g., \"512m\", \"1g\")",

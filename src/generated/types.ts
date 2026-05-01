@@ -1,4 +1,292 @@
 export type paths = {
+    "/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List persistent agents */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["stromboli_internal_agent.Snapshot"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Spawn a persistent agent
+         * @description Launches a long-lived Claude container with stream-json I/O.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description Agent configuration */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["stromboli_internal_agent.CreateRequest"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.CreateAgentResponse"];
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.errorBody"];
+                    };
+                };
+                /** @description Spawn failed */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.errorBody"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get persistent agent */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Agent ID */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["stromboli_internal_agent.Snapshot"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.errorBody"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /** Stop a persistent agent */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Agent ID */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "*/*": components["schemas"]["internal_api.errorBody"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{id}/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send a turn to a persistent agent */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Agent ID */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            /** @description Prompt */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["internal_api.SendAgentRequest"];
+                };
+            };
+            responses: {
+                /** @description Accepted */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.SendAgentResponse"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.errorBody"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.errorBody"];
+                    };
+                };
+                /** @description Turn already in progress */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.errorBody"];
+                    };
+                };
+                /** @description Agent has exited */
+                410: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.errorBody"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{id}/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stream a persistent agent's events (SSE) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description Agent ID */
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description SSE stream of agent.Event objects */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/event-stream": string;
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/event-stream": components["schemas"]["internal_api.errorBody"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/logout": {
         parameters: {
             query?: never;
@@ -306,6 +594,270 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List images
+         * @description Returns all local container images sorted by compatibility rank. Images with rank 1-2 are verified compatible, rank 3 is standard glibc (compatible), rank 4 is incompatible (Alpine/musl).
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description List of images (empty array if none exist) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.ImagesListResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/images/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Inspect image
+         * @description Returns detailed information about a specific container image including all labels and compatibility information.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /**
+                     * @description Image name with optional tag
+                     * @example python:3.12-slim
+                     */
+                    name: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Image details */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.ImageDetailResponse"];
+                    };
+                };
+                /** @description Invalid image name */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.ErrorResponse"];
+                    };
+                };
+                /** @description Image not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/images/pull": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pull image
+         * @description Pulls a container image from a registry. This operation may take some time for large images.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description Pull request */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["internal_api.ImagePullRequest"];
+                };
+            };
+            responses: {
+                /** @description Image pulled successfully */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.ImagePullResponse"];
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.ErrorResponse"];
+                    };
+                };
+                /** @description Pull failed */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/images/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search images
+         * @description Searches container registries for images matching the query. Returns results from Docker Hub and other configured registries.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /**
+                     * @description Search query
+                     * @example python
+                     */
+                    q: string;
+                    /**
+                     * @description Maximum number of results (default 25, max 100)
+                     * @example 10
+                     */
+                    limit?: number;
+                    /**
+                     * @description Don't truncate output (show full descriptions)
+                     * @example true
+                     */
+                    no_trunc?: boolean;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Search results */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.ImageSearchResponse"];
+                    };
+                };
+                /** @description Invalid request (missing query) */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.ErrorResponse"];
+                    };
+                };
+                /** @description Registry search failed */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs": {
         parameters: {
             query?: never;
@@ -412,9 +964,7 @@ export type paths = {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": {
-                            [key: string]: unknown;
-                        };
+                        "application/json": components["schemas"]["internal_api.JobCancelResponse"];
                     };
                 };
                 /** @description Job not found */
@@ -638,7 +1188,7 @@ export type paths = {
         };
         /**
          * List secrets
-         * @description Returns all available Podman secrets that can be injected into agents
+         * @description Returns metadata for all available Podman secrets that can be injected into agents. Secret values are never returned - only IDs, names, and creation times.
          */
         get: {
             parameters: {
@@ -649,7 +1199,7 @@ export type paths = {
             };
             requestBody?: never;
             responses: {
-                /** @description OK */
+                /** @description List of secrets (empty array if none exist) */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -658,7 +1208,7 @@ export type paths = {
                         "application/json": components["schemas"]["internal_api.SecretsListResponse"];
                     };
                 };
-                /** @description Internal Server Error */
+                /** @description Internal server error */
                 500: {
                     headers: {
                         [name: string]: unknown;
@@ -670,8 +1220,191 @@ export type paths = {
             };
         };
         put?: never;
-        post?: never;
+        /**
+         * Create secret
+         * @description Creates a new Podman secret that can be injected into agents. Secret names must be alphanumeric (with dashes and underscores), max 253 characters. Values are limited to 1MB.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            /** @description Create secret request */
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["internal_api.CreateSecretRequest"];
+                };
+            };
+            responses: {
+                /** @description Secret created successfully */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.CreateSecretResponse"];
+                    };
+                };
+                /** @description Invalid request (missing/invalid name or value) */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.CreateSecretResponse"];
+                    };
+                };
+                /** @description Secret with this name already exists */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.CreateSecretResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.CreateSecretResponse"];
+                    };
+                };
+            };
+        };
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/secrets/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get secret metadata
+         * @description Returns metadata about a specific Podman secret. For security, the actual secret value is never returned - only the ID, name, and creation time.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /**
+                     * @description Secret name
+                     * @example github-token
+                     */
+                    name: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Secret metadata */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.SecretInfoResponse"];
+                    };
+                };
+                /** @description Invalid secret name */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.ErrorResponse"];
+                    };
+                };
+                /** @description Secret not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.ErrorResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /**
+         * Delete secret
+         * @description Permanently deletes a Podman secret. This action cannot be undone. Secrets currently in use by running containers may cause those containers to fail.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /**
+                     * @description Secret name
+                     * @example github-token
+                     */
+                    name: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Secret deleted successfully */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.DeleteSecretResponse"];
+                    };
+                };
+                /** @description Invalid secret name */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.DeleteSecretResponse"];
+                    };
+                };
+                /** @description Secret not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.DeleteSecretResponse"];
+                    };
+                };
+                /** @description Internal server error */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["internal_api.DeleteSecretResponse"];
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -938,6 +1671,8 @@ export type components = {
         "internal_api.AsyncRunResponse": {
             /** @example job-abc123def456 */
             job_id?: string;
+            /** @example 550e8400-e29b-41d4-a716-446655440000 */
+            session_id?: string;
         };
         /** @description Claude configuration status */
         "internal_api.ClaudeStatusResponse": {
@@ -963,6 +1698,41 @@ export type components = {
              */
             status?: string;
         };
+        /** @description Created agent metadata */
+        "internal_api.CreateAgentResponse": {
+            created_at?: string;
+            exit_error?: string;
+            id?: string;
+            idle_timeout_disabled?: boolean;
+            idle_timeout_seconds?: number;
+            last_activity_at?: string;
+            session_id?: string;
+            status?: components["schemas"]["stromboli_internal_agent.Status"];
+            turns_completed?: number;
+        };
+        /** @description Request to create a new Podman secret */
+        "internal_api.CreateSecretRequest": {
+            /** @example github-token */
+            name: string;
+            /** @example ghp_xxxxxxxxxxxx */
+            value: string;
+        };
+        /** @description Result of secret creation */
+        "internal_api.CreateSecretResponse": {
+            error?: string;
+            /** @example github-token */
+            name?: string;
+            /** @example true */
+            success?: boolean;
+        };
+        /** @description Result of secret deletion */
+        "internal_api.DeleteSecretResponse": {
+            error?: string;
+            /** @example github-token */
+            name?: string;
+            /** @example true */
+            success?: boolean;
+        };
         "internal_api.ErrorResponse": {
             error?: string;
         };
@@ -975,6 +1745,100 @@ export type components = {
             status?: string;
             /** @example 0.1.4 */
             version?: string;
+        };
+        /** @description Detailed container image information including labels */
+        "internal_api.ImageDetailResponse": {
+            /** @example 3 */
+            compatibility_rank?: number;
+            /** @example true */
+            compatible?: boolean;
+            /** @example 2024-01-15T10:30:00Z */
+            created?: string;
+            /** @example Python development image */
+            description?: string;
+            /** @example false */
+            has_claude_cli?: boolean;
+            /** @example sha256:abc123def456 */
+            id?: string;
+            labels?: {
+                [key: string]: string;
+            };
+            /** @example Standard glibc-based (compatible) */
+            rank_description?: string;
+            /** @example python */
+            repository?: string;
+            /** @example 125000000 */
+            size?: number;
+            /** @example 3.12-slim */
+            tag?: string;
+            /**
+             * @example [
+             *       "python",
+             *       "pip"
+             *     ]
+             */
+            tools?: string[];
+        };
+        /** @description Container image metadata with compatibility information */
+        "internal_api.ImageInfoResponse": {
+            /** @example 3 */
+            compatibility_rank?: number;
+            /** @example true */
+            compatible?: boolean;
+            /** @example 2024-01-15T10:30:00Z */
+            created?: string;
+            /** @example Python development image */
+            description?: string;
+            /** @example false */
+            has_claude_cli?: boolean;
+            /** @example sha256:abc123def456 */
+            id?: string;
+            /** @example python */
+            repository?: string;
+            /** @example 125000000 */
+            size?: number;
+            /** @example 3.12-slim */
+            tag?: string;
+            /**
+             * @example [
+             *       "python",
+             *       "pip"
+             *     ]
+             */
+            tools?: string[];
+        };
+        /** @description Request to pull a container image from a registry */
+        "internal_api.ImagePullRequest": {
+            /** @example python:3.12-slim */
+            image: string;
+            /** @example linux/amd64 */
+            platform?: string;
+            /** @example true */
+            quiet?: boolean;
+        };
+        /** @description Result of image pull operation */
+        "internal_api.ImagePullResponse": {
+            /** @example python:3.12-slim */
+            image?: string;
+            /** @example sha256:abc123def456 */
+            image_id?: string;
+            /** @example true */
+            success?: boolean;
+        };
+        /** @description Search results from container registries */
+        "internal_api.ImageSearchResponse": {
+            results?: components["schemas"]["internal_api.SearchResultResponse"][];
+        };
+        /** @description List of local container images sorted by compatibility */
+        "internal_api.ImagesListResponse": {
+            images?: components["schemas"]["internal_api.ImageInfoResponse"][];
+        };
+        /** @description Result of a job cancel request */
+        "internal_api.JobCancelResponse": {
+            /** @example true */
+            cancelled?: boolean;
+            /** @example job-abc123def456 */
+            job_id?: string;
         };
         /** @description List of async jobs */
         "internal_api.JobListResponse": {
@@ -994,6 +1858,7 @@ export type components = {
             session_id?: string;
             /** @example running */
             status?: components["schemas"]["stromboli_internal_job.Status"];
+            structured_output?: Record<string, never>;
             /** @example 2024-01-15T10:31:00Z */
             updated_at?: string;
         };
@@ -1029,6 +1894,8 @@ export type components = {
         };
         /** @description Response from Claude execution */
         "internal_api.RunResponse": {
+            /** @description Crash details (when status is "crashed") */
+            crash_info?: components["schemas"]["stromboli_internal_job.CrashInfo"];
             /**
              * @description Error message (when failed)
              * @example
@@ -1040,7 +1907,7 @@ export type components = {
              */
             id?: string;
             /**
-             * @description Claude's output (when successful)
+             * @description Claude's raw output (full CLI output, including JSON envelope when output_format=json)
              * @example Here is my analysis...
              */
             output?: string;
@@ -1050,21 +1917,60 @@ export type components = {
              */
             session_id?: string;
             /**
-             * @description Execution status: completed, error
+             * @description Execution status: completed, crashed, error
              * @example completed
              */
             status?: string;
+            /**
+             * @description Extracted structured_output from Claude's JSON envelope (when json_schema is used).
+             *     Convenience field so callers don't need to parse the envelope themselves.
+             */
+            structured_output?: Record<string, never>;
+            /**
+             * @description Token usage totals + estimated USD cost. Populated best-effort from the
+             *     session's JSONL; nil when the session file isn't readable yet or no
+             *     assistant message reported usage.
+             */
+            usage?: components["schemas"]["stromboli_internal_job.Usage"];
+        };
+        /** @description Search result from a container registry */
+        "internal_api.SearchResultResponse": {
+            /** @example false */
+            automated?: boolean;
+            /** @example Python is an interpreted programming language */
+            description?: string;
+            /** @example docker.io */
+            index?: string;
+            /** @example python */
+            name?: string;
+            /** @example true */
+            official?: boolean;
+            /** @example 8500 */
+            stars?: number;
+        };
+        /** @description Secret metadata (never contains the actual secret value) */
+        "internal_api.SecretInfoResponse": {
+            /** @example 2024-01-15T10:30:00Z */
+            created_at?: string;
+            /** @example abc123def456 */
+            id?: string;
+            /** @example github-token */
+            name?: string;
         };
         /** @description List of available secrets that can be injected into agents */
         "internal_api.SecretsListResponse": {
             error?: string;
-            /**
-             * @example [
-             *       "github-token",
-             *       "gitlab-token"
-             *     ]
-             */
-            secrets?: string[];
+            secrets?: components["schemas"]["internal_api.SecretInfoResponse"][];
+        };
+        /** @description Append a prompt to a running agent's stream-json stdin */
+        "internal_api.SendAgentRequest": {
+            /** @example Tell me about that alert */
+            prompt: string;
+        };
+        /** @description Acknowledgement that a turn has started; output streams via /stream */
+        "internal_api.SendAgentResponse": {
+            /** @example turn-abc123 */
+            turn_id?: string;
         };
         /** @description Result of session destruction */
         "internal_api.SessionDestroyResponse": {
@@ -1074,16 +1980,22 @@ export type components = {
             /** @example true */
             success?: boolean;
         };
-        /** @description List of existing sessions */
+        /** @description Metadata about a single session */
+        "internal_api.SessionInfo": {
+            /** @example sess-abc123 */
+            id?: string;
+            /**
+             * @description Title is set by a UserPromptSubmit hook returning
+             *     hookSpecificOutput.sessionTitle (or by /rename in interactive mode).
+             *     Empty when no title was ever set for this session.
+             * @example Refactor billing service
+             */
+            title?: string;
+        };
+        /** @description List of existing sessions with metadata */
         "internal_api.SessionListResponse": {
             error?: string;
-            /**
-             * @example [
-             *       "sess-abc123",
-             *       "sess-def456"
-             *     ]
-             */
-            sessions?: string[];
+            sessions?: components["schemas"]["internal_api.SessionInfo"][];
         };
         /** @description A single message from session history */
         "internal_api.SessionMessageResponse": {
@@ -1112,6 +2024,59 @@ export type components = {
             subject?: string;
             valid?: boolean;
         };
+        "internal_api.errorBody": {
+            error?: string;
+        };
+        /** @description Configuration for spawning a long-lived Claude agent */
+        "stromboli_internal_agent.CreateRequest": {
+            /**
+             * @description Claude CLI options forwarded to the command builder. Same shape as
+             *     RunRequest.claude so callers don't have to learn two schemas — the
+             *     field is fully typed in OpenAPI rather than a freeform object.
+             */
+            claude?: components["schemas"]["stromboli_internal_types.ClaudeOptions"];
+            /**
+             * @description DisableIdleTimeout opts the agent out of the idle watchdog entirely.
+             *     The agent will run until DELETE /agents/{id} or server shutdown — no
+             *     auto-stop on inactivity. Use only for service bots where the caller
+             *     owns the lifecycle explicitly; an agent with this set CAN'T leak by
+             *     being forgotten, so the safety net you'd otherwise have is gone.
+             *     Stromboli logs a loud WARN on spawn so the override is visible.
+             * @example false
+             */
+            disable_idle_timeout?: boolean;
+            /**
+             * @description Idle-timeout override in seconds. Zero means "use the manager default
+             *     (DefaultIdleTimeout)". Negative values are rejected at parse time.
+             *     Ignored when DisableIdleTimeout is true.
+             * @example 1800
+             */
+            idle_timeout_seconds?: number;
+            /**
+             * @description Initial prompt sent as the first turn. Optional — callers can also
+             *     create an empty agent and use /send for the first interaction.
+             * @example You are an on-call assistant.
+             */
+            prompt?: string;
+            /**
+             * @description Working directory inside the container.
+             * @example /workspace
+             */
+            workdir?: string;
+        };
+        "stromboli_internal_agent.Snapshot": {
+            created_at?: string;
+            exit_error?: string;
+            id?: string;
+            idle_timeout_disabled?: boolean;
+            idle_timeout_seconds?: number;
+            last_activity_at?: string;
+            session_id?: string;
+            status?: components["schemas"]["stromboli_internal_agent.Status"];
+            turns_completed?: number;
+        };
+        /** @enum {string} */
+        "stromboli_internal_agent.Status": "starting" | "idle" | "generating" | "exited";
         /** @description A content block (text, tool_use, or tool_result) */
         "stromboli_internal_history.ContentBlock": {
             /**
@@ -1285,6 +2250,24 @@ export type components = {
         };
         /** @enum {string} */
         "stromboli_internal_job.Status": "pending" | "running" | "completed" | "failed" | "crashed" | "cancelled";
+        "stromboli_internal_job.Usage": {
+            cache_creation_input_tokens?: number;
+            cache_read_input_tokens?: number;
+            /**
+             * @description EstimatedCostUSD is best-effort: tokens × Anthropic's published
+             *     per-1M rates, summed across all four buckets. Zero when the model
+             *     isn't recognized or no usage was reported.
+             */
+            estimated_cost_usd?: number;
+            input_tokens?: number;
+            /**
+             * @description Model identifier reported by Claude (e.g. "claude-opus-4-7-20260101").
+             *     Empty when the model is unknown — cost estimation skipped in that case.
+             */
+            model?: string;
+            output_tokens?: number;
+            total_tokens?: number;
+        };
         /** @description All available Claude CLI options for headless execution */
         "stromboli_internal_types.ClaudeOptions": {
             /** @description Additional directories for tool access */
@@ -1316,6 +2299,13 @@ export type components = {
              * @example Focus on security best practices
              */
             append_system_prompt?: string;
+            /**
+             * @description Bedrock service tier when running against AWS Bedrock as the model
+             *     backend. Valid values: "default", "flex", "priority". Translates to
+             *     ANTHROPIC_BEDROCK_SERVICE_TIER. Ignored when not on Bedrock. (#77)
+             * @example priority
+             */
+            bedrock_service_tier?: string;
             /** @description Beta headers for API requests */
             betas?: string[];
             /**
@@ -1346,6 +2336,21 @@ export type components = {
              */
             disallowed_tools?: string[];
             /**
+             * @description Effort level for thinking/agentic complexity. Valid values per the
+             *     upstream CLI reference: low, medium, high, xhigh, max. The accepted
+             *     subset depends on the model — Claude rejects unsupported levels at
+             *     runtime, so Stromboli does not gate on an enum here.
+             * @example high
+             */
+            effort?: string;
+            /**
+             * @description Opt into Claude Code's native PowerShell tool on Windows agent hosts.
+             *     Translates to CLAUDE_CODE_USE_POWERSHELL_TOOL=1. No-op on non-Windows
+             *     containers. (#81)
+             * @example false
+             */
+            enable_powershell_tool?: boolean;
+            /**
              * @description Fallback model when default is overloaded
              * @example haiku
              */
@@ -1373,10 +2378,15 @@ export type components = {
              */
             json_schema?: string;
             /**
-             * @description Maximum dollar amount for API calls
+             * @description Maximum dollar amount for API calls (pointer to distinguish 0 from unset)
              * @example 5
              */
             max_budget_usd?: number;
+            /**
+             * @description Maximum number of agentic turns (0 = unlimited, nil = use CLI default)
+             * @example 30
+             */
+            max_turns?: number;
             /** @description MCP server config files or JSON strings */
             mcp_configs?: string[];
             /**
@@ -1401,6 +2411,14 @@ export type components = {
             permission_mode?: string;
             /** @description Plugin directories */
             plugin_dirs?: string[];
+            /**
+             * @description Prompt cache TTL. "" leaves Claude's default; "5m" sets
+             *     FORCE_PROMPT_CACHING_5M=1; "1h" sets ENABLE_PROMPT_CACHING_1H=1.
+             *     Useful for long-lived agent loops where the same context is re-used
+             *     across many turns. (#76)
+             * @example 1h
+             */
+            prompt_caching_ttl?: string;
             /**
              * @description Re-emit user messages on stdout
              * @example false
@@ -1451,10 +2469,70 @@ export type components = {
              */
             verbose?: boolean;
         };
+        /** @description Runtime environment configuration (single container or compose) */
+        "stromboli_internal_types.EnvironmentConfig": {
+            /**
+             * @description Optional build timeout override for compose (e.g., "15m")
+             *     If not specified, uses server default (10m)
+             * @example 15m
+             */
+            build_timeout?: string;
+            /**
+             * @description Path to compose file (required when type="compose")
+             *     Must be an absolute path ending in .yml or .yaml
+             * @example /home/user/project/docker-compose.yml
+             */
+            path?: string;
+            /**
+             * @description Service name where Claude will run (required when type="compose")
+             * @example dev
+             */
+            service?: string;
+            /**
+             * @description Type of environment: "" (default single container) or "compose"
+             * @example compose
+             */
+            type?: string;
+        };
+        /** @description Commands to run at specific container lifecycle stages */
+        "stromboli_internal_types.LifecycleHooks": {
+            /**
+             * @description HooksTimeout is the maximum duration for all hooks combined (e.g., "5m", "30s").
+             *     If not specified, hooks run with the container's timeout.
+             *     This is useful to prevent long-running hooks from blocking the main command.
+             * @example 5m
+             */
+            hooks_timeout?: string;
+            /**
+             * @description OnCreateCommand runs after container creation, before Claude starts (first run only).
+             *     Each element is a complete shell command string (devcontainer-style).
+             *     Example: ["apt-get update && apt-get install -y git", "pip install -r requirements.txt"]
+             * @example [
+             *       "pip install -r requirements.txt"
+             *     ]
+             */
+            on_create_command?: string[];
+            /**
+             * @description PostCreate runs after OnCreateCommand completes (first run only).
+             *     Each element is a complete shell command string (devcontainer-style).
+             * @example [
+             *       "npm run setup"
+             *     ]
+             */
+            post_create?: string[];
+            /**
+             * @description PostStart runs after container starts (every run, including continues).
+             *     Each element is a complete shell command string (devcontainer-style).
+             * @example [
+             *       "redis-server --daemonize yes"
+             *     ]
+             */
+            post_start?: string[];
+        };
         /** @description Podman container mount configuration */
         "stromboli_internal_types.PodmanOptions": {
             /**
-             * @description CPU shares (relative weight, default 1024)
+             * @description CPU shares (relative weight, default 1024; pointer to distinguish 0 from unset)
              * @example 512
              */
             cpu_shares?: number;
@@ -1464,10 +2542,18 @@ export type components = {
              */
             cpus?: string;
             /**
+             * @description Environment specifies a compose-based multi-service environment.
+             *     When set, the agent runs inside the specified service of the compose stack
+             *     instead of a standalone container.
+             */
+            environment?: components["schemas"]["stromboli_internal_types.EnvironmentConfig"];
+            /**
              * @description Container image override (must match allowed patterns)
              * @example python:3.12
              */
             image?: string;
+            /** @description Lifecycle hooks for running commands at specific container events */
+            lifecycle?: components["schemas"]["stromboli_internal_types.LifecycleHooks"];
             /**
              * @description Memory limit (e.g., "512m", "1g")
              * @example 512m
