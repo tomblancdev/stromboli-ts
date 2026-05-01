@@ -9,17 +9,28 @@
 
 import { http, HttpResponse } from 'msw'
 import {
+  createAgentSnapshot,
   createAsyncRunResponse,
   createClaudeStatusResponse,
+  createCreateAgentResponse,
+  createCreateSecretResponse,
+  createDeleteSecretResponse,
   createErrorResponse,
   createHealthResponse,
+  createImageDetail,
+  createImagePullResponse,
+  createImageSearchResponse,
+  createImagesListResponse,
   createJobId,
   createJobListResponse,
   createJobResponse,
   createRunResponse,
+  createSecretInfo,
   createSecretsListResponse,
+  createSendAgentResponse,
   createSessionDestroyResponse,
   createSessionListResponse,
+  createSessionMessageResponse,
   createSessionMessagesResponse,
   createTokenResponse,
   createValidateResponse,
@@ -299,6 +310,167 @@ export function createHandlers(baseUrl = MOCK_BASE_URL) {
           offset,
         })
       )
+    }),
+
+    /**
+     * GET /sessions/:id/messages/:message_id - Get a single session message
+     */
+    http.get(`${baseUrl}/sessions/:id/messages/:message_id`, ({ params }) => {
+      const { message_id } = params as { id: string; message_id: string }
+      return HttpResponse.json(createSessionMessageResponse({ uuid: message_id }))
+    }),
+
+    // ========================================================================
+    // Persistent Agent Endpoints
+    // ========================================================================
+
+    /**
+     * GET /agents - List persistent agents
+     */
+    http.get(`${baseUrl}/agents`, () => {
+      return HttpResponse.json([createAgentSnapshot(), createAgentSnapshot()])
+    }),
+
+    /**
+     * POST /agents - Spawn a persistent agent
+     */
+    http.post(`${baseUrl}/agents`, async () => {
+      return HttpResponse.json(createCreateAgentResponse(), { status: 201 })
+    }),
+
+    /**
+     * GET /agents/:id - Get persistent agent
+     */
+    http.get(`${baseUrl}/agents/:id`, ({ params }) => {
+      const { id } = params as { id: string }
+      return HttpResponse.json(createAgentSnapshot({ id }))
+    }),
+
+    /**
+     * DELETE /agents/:id - Stop persistent agent
+     */
+    http.delete(`${baseUrl}/agents/:id`, ({ params }) => {
+      const { id } = params as { id: string }
+      return HttpResponse.json(createAgentSnapshot({ id, status: 'stopped' }))
+    }),
+
+    /**
+     * POST /agents/:id/send - Send a turn
+     */
+    http.post(`${baseUrl}/agents/:id/send`, async ({ request }) => {
+      const body = (await request.json()) as { prompt?: string }
+      if (!body?.prompt) {
+        return HttpResponse.json(createErrorResponse('prompt is required'), { status: 400 })
+      }
+      return HttpResponse.json(createSendAgentResponse(), { status: 202 })
+    }),
+
+    /**
+     * GET /agents/:id/stream - Stream agent SSE events
+     */
+    http.get(`${baseUrl}/agents/:id/stream`, () => {
+      const encoder = new TextEncoder()
+      const stream = new ReadableStream({
+        start(controller) {
+          const lines = [
+            'event: agent.output\n',
+            'data: {"text":"hello"}\n',
+            '\n',
+            'event: agent.done\n',
+            'data: {}\n',
+            '\n',
+          ]
+          for (const l of lines) controller.enqueue(encoder.encode(l))
+          controller.close()
+        },
+      })
+      return new HttpResponse(stream, {
+        headers: { 'Content-Type': 'text/event-stream' },
+      })
+    }),
+
+    // ========================================================================
+    // Container Image Endpoints
+    // ========================================================================
+
+    /**
+     * GET /images - List local images
+     */
+    http.get(`${baseUrl}/images`, () => {
+      return HttpResponse.json(createImagesListResponse())
+    }),
+
+    /**
+     * GET /images/search - Search registry for images
+     *
+     * Registered BEFORE /images/:name so the literal "search" segment
+     * doesn't get captured as a `:name` path parameter.
+     */
+    http.get(`${baseUrl}/images/search`, ({ request }) => {
+      const url = new URL(request.url)
+      const q = url.searchParams.get('q')
+      if (!q) {
+        return HttpResponse.json(createErrorResponse('q is required'), { status: 400 })
+      }
+      return HttpResponse.json(createImageSearchResponse())
+    }),
+
+    /**
+     * POST /images/pull - Pull an image
+     */
+    http.post(`${baseUrl}/images/pull`, async ({ request }) => {
+      const body = (await request.json()) as { image?: string }
+      if (!body?.image) {
+        return HttpResponse.json(createErrorResponse('image is required'), { status: 400 })
+      }
+      return HttpResponse.json(createImagePullResponse({ image: body.image }))
+    }),
+
+    /**
+     * GET /images/:name - Inspect a local image
+     */
+    http.get(`${baseUrl}/images/:name`, ({ params }) => {
+      const { name } = params as { name: string }
+      const [repository, tag] = name.split(':')
+      return HttpResponse.json(
+        createImageDetail({
+          repository: repository ?? name,
+          tag: tag ?? 'latest',
+        })
+      )
+    }),
+
+    // ========================================================================
+    // Secrets CRUD
+    // ========================================================================
+
+    /**
+     * POST /secrets - Create a secret
+     */
+    http.post(`${baseUrl}/secrets`, async ({ request }) => {
+      const body = (await request.json()) as { name?: string; value?: string }
+      if (!body?.name || !body?.value) {
+        return HttpResponse.json(createErrorResponse('name and value are required'), {
+          status: 400,
+        })
+      }
+      return HttpResponse.json(createCreateSecretResponse({ name: body.name }), { status: 201 })
+    }),
+
+    /**
+     * GET /secrets/:name - Get secret metadata
+     */
+    http.get(`${baseUrl}/secrets/:name`, ({ params }) => {
+      const { name } = params as { name: string }
+      return HttpResponse.json(createSecretInfo({ name }))
+    }),
+
+    /**
+     * DELETE /secrets/:name - Delete a secret
+     */
+    http.delete(`${baseUrl}/secrets/:name`, ({ params }) => {
+      const { name } = params as { name: string }
+      return HttpResponse.json(createDeleteSecretResponse({ name }))
     }),
   ]
 }

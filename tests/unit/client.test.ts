@@ -1110,4 +1110,162 @@ describe('StromboliClient', () => {
     // doesn't support reliable timeout testing. The feature is implemented
     // at lines 1766-1770 and 1852-1858 in client.ts.
   })
+
+  // ==========================================================================
+  // Persistent Agents
+  // ==========================================================================
+
+  describe('persistent agents', () => {
+    it('listAgents should return an array of agent snapshots', async () => {
+      const client = createClient()
+      const agents = await client.listAgents()
+      expect(Array.isArray(agents)).toBe(true)
+      expect(agents.length).toBeGreaterThan(0)
+      expect(agents[0]?.id).toBeDefined()
+    })
+
+    it('spawnAgent should return the new agent metadata', async () => {
+      const client = createClient()
+      const agent = await client.spawnAgent({
+        prompt: 'You are an on-call assistant.',
+        workdir: '/workspace',
+      })
+      expect(agent.id).toBeDefined()
+      expect(agent.session_id).toBeDefined()
+    })
+
+    it('getAgent should echo the requested agent id', async () => {
+      const client = createClient()
+      const agent = await client.getAgent('agent-xyz')
+      expect(agent.id).toBe('agent-xyz')
+    })
+
+    it('stopAgent should resolve to undefined', async () => {
+      const client = createClient()
+      await expect(client.stopAgent('agent-xyz')).resolves.toBeUndefined()
+    })
+
+    it('sendToAgent should return a turn id', async () => {
+      const client = createClient()
+      const ack = await client.sendToAgent('agent-xyz', { prompt: 'go' })
+      expect(ack.turn_id).toBeDefined()
+    })
+
+    it('sendToAgent should error when prompt is missing', async () => {
+      const client = createClient()
+      await expect(
+        // @ts-expect-error testing runtime validation when prompt is omitted
+        client.sendToAgent('agent-xyz', {})
+      ).rejects.toBeInstanceOf(StromboliError)
+    })
+
+    it('streamAgent should yield message and done events', async () => {
+      const client = createClient()
+      const events: Array<{ type: string }> = []
+      for await (const ev of client.streamAgent('agent-xyz')) {
+        events.push(ev)
+        if (ev.type === 'done') break
+      }
+      expect(events.some((e) => e.type === 'message')).toBe(true)
+      expect(events[events.length - 1]?.type).toBe('done')
+    })
+  })
+
+  // ==========================================================================
+  // Container Images
+  // ==========================================================================
+
+  describe('container images', () => {
+    it('listImages should return image entries', async () => {
+      const client = createClient()
+      const result = await client.listImages()
+      expect(result.images).toBeDefined()
+      expect(result.images?.length).toBeGreaterThan(0)
+    })
+
+    it('inspectImage should echo repository and tag from path', async () => {
+      const client = createClient()
+      const detail = await client.inspectImage('python:3.12-slim')
+      expect(detail.repository).toBe('python')
+      expect(detail.tag).toBe('3.12-slim')
+      expect(detail.labels).toBeDefined()
+    })
+
+    it('pullImage should return success and image_id', async () => {
+      const client = createClient()
+      const result = await client.pullImage({ image: 'python:3.12-slim' })
+      expect(result.success).toBe(true)
+      expect(result.image).toBe('python:3.12-slim')
+      expect(result.image_id).toBeDefined()
+    })
+
+    it('pullImage should error when image is missing', async () => {
+      const client = createClient()
+      await expect(
+        // @ts-expect-error testing runtime validation
+        client.pullImage({})
+      ).rejects.toBeInstanceOf(StromboliError)
+    })
+
+    it('searchImages should pass the query string', async () => {
+      const client = createClient()
+      const result = await client.searchImages('python', { limit: 5 })
+      expect(result.results).toBeDefined()
+    })
+
+    it('searchImages should error when query is empty', async () => {
+      const client = createClient()
+      await expect(client.searchImages('')).rejects.toBeInstanceOf(StromboliError)
+    })
+  })
+
+  // ==========================================================================
+  // Secrets CRUD
+  // ==========================================================================
+
+  describe('secrets CRUD', () => {
+    it('createSecret should return success', async () => {
+      const client = createClient()
+      const result = await client.createSecret({
+        name: 'github-token',
+        value: 'ghp_xxx',
+      })
+      expect(result.success).toBe(true)
+      expect(result.name).toBe('github-token')
+    })
+
+    it('createSecret should error when name or value is missing', async () => {
+      const client = createClient()
+      await expect(
+        // @ts-expect-error testing runtime validation
+        client.createSecret({ name: 'github-token' })
+      ).rejects.toBeInstanceOf(StromboliError)
+    })
+
+    it('getSecret should return metadata for the named secret', async () => {
+      const client = createClient()
+      const meta = await client.getSecret('github-token')
+      expect(meta.name).toBe('github-token')
+      expect(meta.id).toBeDefined()
+    })
+
+    it('deleteSecret should return success', async () => {
+      const client = createClient()
+      const result = await client.deleteSecret('github-token')
+      expect(result.success).toBe(true)
+      expect(result.name).toBe('github-token')
+    })
+  })
+
+  // ==========================================================================
+  // Single Session Message
+  // ==========================================================================
+
+  describe('getSessionMessage', () => {
+    it('should return the message identified by message_id', async () => {
+      const client = createClient()
+      const msg = await client.getSessionMessage('sess-abc', 'msg-uuid-123')
+      expect(msg.uuid).toBe('msg-uuid-123')
+    })
+  })
 })

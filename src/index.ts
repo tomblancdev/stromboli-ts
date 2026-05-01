@@ -155,6 +155,52 @@ export type {
   StreamDoneEvent,
   /** Options for streaming execution */
   StreamOptions,
+  // Persistent agents
+  /** Request to spawn a persistent agent */
+  SpawnAgentRequest,
+  /** Response from spawning a persistent agent */
+  SpawnAgentResponse,
+  /** Snapshot of a persistent agent */
+  AgentSnapshot,
+  /** Persistent agent lifecycle status */
+  AgentStatus,
+  /** Request to send a turn to an agent */
+  SendAgentRequest,
+  /** Response from sending a turn to an agent */
+  SendAgentResponse,
+  /** Discriminated union of agent stream events */
+  AgentStreamEvent,
+  /** Per-turn event from an agent stream */
+  AgentStreamMessageEvent,
+  /** Stream-level error event from an agent stream */
+  AgentStreamErrorEvent,
+  /** Terminal event from an agent stream */
+  AgentStreamDoneEvent,
+  // Container images
+  /** Container image metadata with compatibility info */
+  ImageInfo,
+  /** Detailed container image info */
+  ImageDetail,
+  /** List of container images */
+  ImagesListResponse,
+  /** Request to pull a container image */
+  ImagePullRequest,
+  /** Response from pulling a container image */
+  ImagePullResponse,
+  /** Container image search results */
+  ImageSearchResponse,
+  // Secrets CRUD
+  /** Request to create a Podman secret */
+  CreateSecretRequest,
+  /** Response from creating a Podman secret */
+  CreateSecretResponse,
+  /** Podman secret metadata */
+  SecretInfo,
+  /** Response from deleting a Podman secret */
+  DeleteSecretResponse,
+  // Single message
+  /** Single session message response */
+  SessionMessageResponse,
 } from './client'
 
 // ============================================================================
