@@ -5,20 +5,17 @@
  */
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test'
-import { http, HttpResponse } from 'msw'
+import { HttpResponse, http } from 'msw'
 import { type SimpleRunRequest, StromboliClient } from '../../src/client'
 import { StromboliError } from '../../src/errors'
 import {
-  MOCK_BASE_URL,
   createErrorResponse,
   createHealthResponse,
-  createJobListResponse,
   createJobResponse,
   createRunResponse,
-  createSessionDestroyResponse,
-  createSessionListResponse,
   createSessionMessagesResponse,
   jobStore,
+  MOCK_BASE_URL,
   resetServer,
   server,
   startServer,

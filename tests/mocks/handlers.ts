@@ -7,7 +7,7 @@
  * @module tests/mocks/handlers
  */
 
-import { http, HttpResponse } from 'msw'
+import { HttpResponse, http } from 'msw'
 import {
   createAgentSnapshot,
   createAsyncRunResponse,
@@ -297,12 +297,10 @@ export function createHandlers(baseUrl = MOCK_BASE_URL) {
     /**
      * GET /sessions/:id/messages - Get session messages
      */
-    http.get(`${baseUrl}/sessions/:id/messages`, ({ request, params }) => {
+    http.get(`${baseUrl}/sessions/:id/messages`, ({ request }) => {
       const url = new URL(request.url)
       const limit = Number.parseInt(url.searchParams.get('limit') ?? '50', 10)
       const offset = Number.parseInt(url.searchParams.get('offset') ?? '0', 10)
-
-      const { id } = params as { id: string }
 
       return HttpResponse.json(
         createSessionMessagesResponse(5, {
