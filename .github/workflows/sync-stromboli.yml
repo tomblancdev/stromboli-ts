@@ -89,6 +89,12 @@ jobs:
           echo "Updated package.json:"
           jq '.stromboli' package.json
 
+      - name: Reformat package.json
+        # jq pretty-prints arrays one-element-per-line, which conflicts with
+        # biome's "keep short arrays inline" formatter. Run biome here so the
+        # generated PR is lint-clean instead of failing on a cosmetic nit.
+        run: bunx biome format --write package.json
+
       - name: Regenerate typed client
         # scripts/generate.ts reads .stromboli.apiVersion from package.json
         # and fetches the matching swagger.yaml from the upstream tag.
