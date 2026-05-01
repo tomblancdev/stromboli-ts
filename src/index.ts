@@ -89,7 +89,7 @@
  * The main Stromboli client class.
  * @see {@link StromboliClient}
  */
-export { StromboliClient, isCompatible, SDK_VERSION, API_VERSION_RANGE } from './client'
+export { API_VERSION_RANGE, isCompatible, SDK_VERSION, StromboliClient } from './client'
 
 // ============================================================================
 // Client Types
@@ -99,108 +99,108 @@ export { StromboliClient, isCompatible, SDK_VERSION, API_VERSION_RANGE } from '.
  * Configuration and request/response types for the client.
  */
 export type {
-  /** Options for initializing the client */
-  StromboliClientOptions,
-  /** Response object for onResponse interceptor */
-  InterceptorResponse,
-  /** Custom retry delay function type */
-  RetryDelayFn,
-  /** Simplified request interface for common use cases */
-  SimpleRunRequest,
-  /** Full request type for running Claude */
-  RunRequest,
-  /** Response from synchronous run */
-  RunResponse,
-  /** Response from async run (job ID) */
-  AsyncRunResponse,
-  /** Full job details */
-  JobResponse,
-  /** List of jobs */
-  JobListResponse,
-  /** Health check response */
-  HealthResponse,
-  /** Claude configuration status */
-  ClaudeStatusResponse,
-  /** List of available secrets */
-  SecretsListResponse,
-  /** JWT token response */
-  TokenResponse,
-  /** Token validation response */
-  ValidateResponse,
-  /** List of sessions */
-  SessionListResponse,
-  /** Session messages response */
-  SessionMessagesResponse,
-  /** Session destroy response */
-  SessionDestroyResponse,
-  /** Claude-specific options */
-  ClaudeOptions,
-  /** Container/Podman options */
-  PodmanOptions,
-  /** Job status enum values */
-  JobStatus,
-  /** Options for waiting for job completion */
-  WaitForJobOptions,
-  /** Streaming event from Claude output (discriminated union) */
-  StreamEvent,
-  /** Content event during streaming */
-  StreamContentEvent,
-  /** Tool use event during streaming */
-  StreamToolUseEvent,
-  /** Tool result event during streaming */
-  StreamToolResultEvent,
-  /** Error event during streaming */
-  StreamErrorEvent,
-  /** Done event during streaming */
-  StreamDoneEvent,
-  /** Options for streaming execution */
-  StreamOptions,
-  // Persistent agents
-  /** Request to spawn a persistent agent */
-  SpawnAgentRequest,
-  /** Response from spawning a persistent agent */
-  SpawnAgentResponse,
   /** Snapshot of a persistent agent */
   AgentSnapshot,
   /** Persistent agent lifecycle status */
   AgentStatus,
-  /** Request to send a turn to an agent */
-  SendAgentRequest,
-  /** Response from sending a turn to an agent */
-  SendAgentResponse,
+  /** Terminal event from an agent stream */
+  AgentStreamDoneEvent,
+  /** Stream-level error event from an agent stream */
+  AgentStreamErrorEvent,
   /** Discriminated union of agent stream events */
   AgentStreamEvent,
   /** Per-turn event from an agent stream */
   AgentStreamMessageEvent,
-  /** Stream-level error event from an agent stream */
-  AgentStreamErrorEvent,
-  /** Terminal event from an agent stream */
-  AgentStreamDoneEvent,
+  /** Response from async run (job ID) */
+  AsyncRunResponse,
+  /** Claude-specific options */
+  ClaudeOptions,
+  /** Claude configuration status */
+  ClaudeStatusResponse,
+  // Secrets CRUD
+  /** Request to create a Podman secret */
+  CreateSecretRequest,
+  /** Response from creating a Podman secret */
+  CreateSecretResponse,
+  /** Response from deleting a Podman secret */
+  DeleteSecretResponse,
+  /** Health check response */
+  HealthResponse,
+  /** Detailed container image info */
+  ImageDetail,
   // Container images
   /** Container image metadata with compatibility info */
   ImageInfo,
-  /** Detailed container image info */
-  ImageDetail,
-  /** List of container images */
-  ImagesListResponse,
   /** Request to pull a container image */
   ImagePullRequest,
   /** Response from pulling a container image */
   ImagePullResponse,
   /** Container image search results */
   ImageSearchResponse,
-  // Secrets CRUD
-  /** Request to create a Podman secret */
-  CreateSecretRequest,
-  /** Response from creating a Podman secret */
-  CreateSecretResponse,
+  /** List of container images */
+  ImagesListResponse,
+  /** Response object for onResponse interceptor */
+  InterceptorResponse,
+  /** List of jobs */
+  JobListResponse,
+  /** Full job details */
+  JobResponse,
+  /** Job status enum values */
+  JobStatus,
+  /** Container/Podman options */
+  PodmanOptions,
+  /** Custom retry delay function type */
+  RetryDelayFn,
+  /** Full request type for running Claude */
+  RunRequest,
+  /** Response from synchronous run */
+  RunResponse,
   /** Podman secret metadata */
   SecretInfo,
-  /** Response from deleting a Podman secret */
-  DeleteSecretResponse,
+  /** List of available secrets */
+  SecretsListResponse,
+  /** Request to send a turn to an agent */
+  SendAgentRequest,
+  /** Response from sending a turn to an agent */
+  SendAgentResponse,
+  /** Session destroy response */
+  SessionDestroyResponse,
+  /** List of sessions */
+  SessionListResponse,
   // Single message
   /** Single session message response */
   SessionMessageResponse,
+  /** Session messages response */
+  SessionMessagesResponse,
+  /** Simplified request interface for common use cases */
+  SimpleRunRequest,
+  // Persistent agents
+  /** Request to spawn a persistent agent */
+  SpawnAgentRequest,
+  /** Response from spawning a persistent agent */
+  SpawnAgentResponse,
+  /** Content event during streaming */
+  StreamContentEvent,
+  /** Done event during streaming */
+  StreamDoneEvent,
+  /** Error event during streaming */
+  StreamErrorEvent,
+  /** Streaming event from Claude output (discriminated union) */
+  StreamEvent,
+  /** Options for streaming execution */
+  StreamOptions,
+  /** Tool result event during streaming */
+  StreamToolResultEvent,
+  /** Tool use event during streaming */
+  StreamToolUseEvent,
+  /** Options for initializing the client */
+  StromboliClientOptions,
+  /** JWT token response */
+  TokenResponse,
+  /** Token validation response */
+  ValidateResponse,
+  /** Options for waiting for job completion */
+  WaitForJobOptions,
 } from './client'
 
 // ============================================================================
@@ -216,25 +216,6 @@ export { StromboliError } from './errors'
 // ============================================================================
 // Advanced: Generated Types
 // ============================================================================
-
-/**
- * Re-exported generated types for advanced usage.
- *
- * These types are auto-generated from the Stromboli OpenAPI specification.
- * Use these if you need direct access to the raw API types.
- *
- * @example
- * ```typescript
- * import type { paths, components } from 'stromboli-ts'
- *
- * // Access raw API path types
- * type RunEndpoint = paths['/run']['post']
- *
- * // Access schema components
- * type Job = components['schemas']['internal_api.Job']
- * ```
- */
-export type { paths, components } from './generated/types'
 
 /**
  * Low-level client factory for direct API access.
@@ -254,3 +235,21 @@ export type { paths, components } from './generated/types'
  * ```
  */
 export { createStromboliClient } from './generated/api'
+/**
+ * Re-exported generated types for advanced usage.
+ *
+ * These types are auto-generated from the Stromboli OpenAPI specification.
+ * Use these if you need direct access to the raw API types.
+ *
+ * @example
+ * ```typescript
+ * import type { paths, components } from 'stromboli-ts'
+ *
+ * // Access raw API path types
+ * type RunEndpoint = paths['/run']['post']
+ *
+ * // Access schema components
+ * type Job = components['schemas']['internal_api.Job']
+ * ```
+ */
+export type { components, paths } from './generated/types'
